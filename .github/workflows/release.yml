@@ -1,0 +1,27 @@
+name: Release desktop apps
+on:
+  push:
+    tags: ["v*"]
+permissions: { contents: write }
+jobs:
+  build:
+    strategy: { fail-fast: false, matrix: { os: [windows-latest, macos-latest] } }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE || secrets.WINDOWS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE_PASSWORD || secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

@@ -1,0 +1,15 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS menu_categories (id TEXT PRIMARY KEY, name TEXT NOT NULL, sort_order INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS menu_items (id TEXT PRIMARY KEY, category_id TEXT NOT NULL REFERENCES menu_categories(id), name TEXT NOT NULL, description TEXT NOT NULL, portion TEXT NOT NULL, price REAL NOT NULL CHECK(price >= 0), image TEXT, available INTEGER NOT NULL DEFAULT 1, web_compatible INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS customers (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE, address TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL REFERENCES customers(id), service_date TEXT NOT NULL, fulfilment TEXT NOT NULL CHECK(fulfilment IN ('delivery','pickup')), address TEXT, notes TEXT, source TEXT NOT NULL, status TEXT NOT NULL, payment_status TEXT NOT NULL DEFAULT 'unpaid', total REAL NOT NULL CHECK(total >= 0), created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS order_lines (id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, menu_item_id TEXT REFERENCES menu_items(id), name TEXT NOT NULL, quantity INTEGER NOT NULL CHECK(quantity > 0), unit_price REAL NOT NULL CHECK(unit_price >= 0), line_total REAL NOT NULL CHECK(line_total >= 0));
+CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE, amount REAL NOT NULL CHECK(amount > 0), received_at TEXT NOT NULL, method TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('received','refunded')));
+CREATE TABLE IF NOT EXISTS expenses (id TEXT PRIMARY KEY, date TEXT NOT NULL, category TEXT NOT NULL, description TEXT NOT NULL, amount REAL NOT NULL CHECK(amount > 0), payment_method TEXT NOT NULL, notes TEXT);
+CREATE TABLE IF NOT EXISTS menu_publications (id TEXT PRIMARY KEY, service_date TEXT NOT NULL, payload TEXT NOT NULL, published_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS whatsapp_imports (id TEXT PRIMARY KEY, meta_message_id TEXT NOT NULL UNIQUE, sender TEXT NOT NULL, message TEXT NOT NULL, parsed_payload TEXT, status TEXT NOT NULL, order_id TEXT REFERENCES orders(id), received_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_orders_service_date ON orders(service_date);
+CREATE INDEX IF NOT EXISTS idx_payments_received_at ON payments(received_at);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);

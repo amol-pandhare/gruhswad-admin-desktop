@@ -1,0 +1,8 @@
+{
+  "name": "@gruhswad/whatsapp-webhook",
+  "private": true,
+  "type": "module",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@neondatabase/serverless": "^1.1.0", "@vercel/node": "^5.3.22", "zod": "^4.1.5" },
+  "devDependencies": { "typescript": "^5.9.2" }
+}

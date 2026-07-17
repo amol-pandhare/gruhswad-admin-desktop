@@ -1,0 +1,69 @@
+{
+  "version": 2,
+  "currency": "INR",
+  "categories": [
+    { "id": "chaat", "name": "Chaat & Street Food", "order": 1 },
+    { "id": "starters", "name": "Snacks & Starters", "order": 2 },
+    { "id": "sabudana", "name": "Sabudana Specials", "order": 3 },
+    { "id": "breads", "name": "Parathas & Indian Bread", "order": 4 },
+    { "id": "paneer-curries", "name": "Paneer Curries", "order": 5 },
+    { "id": "veg-curries", "name": "Veg Curries", "order": 6 },
+    { "id": "dal-rice", "name": "Dal & Rice", "order": 7 },
+    { "id": "khichdi-desserts", "name": "Khichdi & Desserts", "order": 8 }
+  ],
+  "items": [
+    { "id": "aloo-tikki", "categoryId": "chaat", "name": "Aloo Tikki", "description": "Crisp potato patties seasoned with home-style spices.", "portion": "1 pc", "price": 45, "image": "1000128873.jpg", "available": true },
+    { "id": "ragda-patis", "categoryId": "chaat", "name": "Ragda Patis", "description": "Potato patties served with a warm white-pea curry and chutneys.", "portion": "1 plate", "price": 99, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "dahi-bhalla-vada", "categoryId": "chaat", "name": "Dahi Bhalla / Vada", "description": "Soft lentil vada topped with curd, chutneys and spices.", "portion": "1 pc", "price": 50, "image": "1000128483.jpg", "available": true },
+    { "id": "vada-pav", "categoryId": "chaat", "name": "Vada Pav", "description": "Spiced potato vada tucked into pav with chutney.", "portion": "1 pc", "price": 50, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "dabeli", "categoryId": "chaat", "name": "Dabeli", "description": "Sweet and spicy potato filling in pav with chutneys and crunch.", "portion": "1 pc", "price": 50, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "aloo-bread-roll", "categoryId": "chaat", "name": "Aloo Bread Roll", "description": "Crisp bread roll filled with seasoned potato.", "portion": "1 pc", "price": 70, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "pav-bhaji", "categoryId": "chaat", "name": "Pav Bhaji", "description": "Buttery pav served with rich homemade vegetable bhaji.", "portion": "1 plate", "price": 179, "image": "1000128468.jpg", "available": true },
+    { "id": "pani-puri", "categoryId": "chaat", "name": "Pani Puri", "description": "Crisp puris with flavourful pani and potato filling.", "portion": "8 pcs", "price": 50, "image": "1000128453.jpg", "available": true },
+
+    { "id": "hara-bhara-kabab", "categoryId": "starters", "name": "Hara Bhara Kabab", "description": "Crisp vegetable and spinach patties.", "portion": "5 pcs", "price": 149, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "veg-cutlet", "categoryId": "starters", "name": "Veg Cutlet", "description": "Home-style mixed vegetable cutlets.", "portion": "5 pcs", "price": 100, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "crispy-cheese-ball", "categoryId": "starters", "name": "Crispy Cheese Ball", "description": "Golden crumbed bites with a cheesy centre.", "portion": "1 plate", "price": 200, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "dry-veg-manchurian", "categoryId": "starters", "name": "Dry Veg Manchurian", "description": "Crisp vegetable dumplings tossed in a savoury Indo-Chinese sauce.", "portion": "7 pcs", "price": 169, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "khaman-dhokla", "categoryId": "starters", "name": "Khaman Dhokla", "description": "Soft steamed gram-flour cakes with a tempered finish.", "portion": "2 pcs", "price": 50, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "pita-pockets-falafel", "categoryId": "starters", "name": "Pita Pockets with Falafel", "description": "Pita pockets filled with falafel and fresh accompaniments.", "portion": "1 plate", "price": 170, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "pita-pockets-potato-shots", "categoryId": "starters", "name": "Pita Pockets with Potato Shots", "description": "Pita pockets filled with crisp potato bites and fresh accompaniments.", "portion": "1 plate", "price": 150, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "assorted-pakoda", "categoryId": "starters", "name": "Assorted Pakoda", "description": "A mixed platter of freshly fried vegetable pakodas.", "portion": "1 plate", "price": 200, "image": "food-placeholder.jpeg", "available": true },
+
+    { "id": "sabudana-vada", "categoryId": "sabudana", "name": "Sabudana Vada", "description": "Crisp tapioca and potato patties with peanuts and spices.", "portion": "2 pcs", "price": 70, "image": "1000128471.jpg", "available": true },
+    { "id": "sabudana-appe", "categoryId": "sabudana", "name": "Sabudana Appe", "description": "Pan-cooked tapioca bites with potato, peanuts and herbs.", "portion": "2 pcs", "price": 50, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "sabudana-khichadi", "categoryId": "sabudana", "name": "Sabudana Khichadi", "description": "Tapioca pearls tossed with potato, peanut and fresh herbs.", "portion": "1 plate", "price": 100, "image": "1000128465.jpg", "available": true },
+
+    { "id": "plain-paratha", "categoryId": "breads", "name": "Plain Paratha", "description": "Home-style whole-wheat layered flatbread.", "portion": "1 pc", "price": 25, "image": "1000128477.jpg", "available": true },
+    { "id": "aloo-paratha", "categoryId": "breads", "name": "Aloo Paratha", "description": "Whole-wheat paratha with a spiced potato filling.", "portion": "1 pc", "price": 50, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "methi-paratha", "categoryId": "breads", "name": "Methi Paratha", "description": "Whole-wheat paratha flavoured with fenugreek and spices.", "portion": "1 pc", "price": 20, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "paneer-paratha", "categoryId": "breads", "name": "Paneer Paratha", "description": "Whole-wheat paratha filled with seasoned paneer.", "portion": "1 pc", "price": 90, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "phulka", "categoryId": "breads", "name": "Phulka", "description": "Soft, flame-finished whole-wheat flatbread.", "portion": "1 pc", "price": 10, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "chapati", "categoryId": "breads", "name": "Chapati", "description": "Fresh home-style whole-wheat flatbread.", "portion": "1 pc", "price": 15, "image": "food-placeholder.jpeg", "available": true },
+
+    { "id": "palak-paneer", "categoryId": "paneer-curries", "name": "Palak Paneer", "description": "Paneer simmered in a seasoned spinach gravy.", "portion": "Full", "price": 249, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "matar-paneer", "categoryId": "paneer-curries", "name": "Matar Paneer", "description": "Paneer and green peas cooked in a home-style gravy.", "portion": "Full", "price": 249, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "paneer-butter-masala", "categoryId": "paneer-curries", "name": "Paneer Butter Masala", "description": "Paneer in a creamy tomato and cashew gravy.", "portion": "Full", "price": 299, "image": "1000128474.jpg", "available": true },
+    { "id": "paneer-bhurji", "categoryId": "paneer-curries", "name": "Paneer Bhurji", "description": "Crumbled paneer cooked with onion, tomato and spices.", "portion": "Full", "price": 250, "image": "food-placeholder.jpeg", "available": true },
+
+    { "id": "dry-aloo-sabji", "categoryId": "veg-curries", "name": "Dry Aloo Sabji", "description": "Potatoes tossed with a fragrant home-style spice blend.", "portion": "Full", "price": 100, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "dum-aloo", "categoryId": "veg-curries", "name": "Dum Aloo", "description": "Slow-cooked potatoes in a rich spiced gravy.", "portion": "Full", "price": 200, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "bhindi-masala", "categoryId": "veg-curries", "name": "Bhindi Masala", "description": "Okra cooked with onion, tomato and aromatic spices.", "portion": "Full", "price": 200, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "aloo-gobi", "categoryId": "veg-curries", "name": "Aloo Gobi", "description": "Potato and cauliflower cooked with home-style spices.", "portion": "Full", "price": 150, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "patol-bhaji", "categoryId": "veg-curries", "name": "Patol Bhaji", "description": "Pointed gourd cooked in a traditional home-style preparation.", "portion": "Full", "price": 149, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "veg-kofta", "categoryId": "veg-curries", "name": "Veg Kofta", "description": "Vegetable koftas served in a rich, seasoned gravy.", "portion": "Full", "price": 269, "image": "food-placeholder.jpeg", "available": true },
+
+    { "id": "dal-fry", "categoryId": "dal-rice", "name": "Dal Fry", "description": "Comforting lentils finished with a fragrant tempering.", "portion": "Full", "price": 129, "image": "1000128480.jpg", "available": true },
+    { "id": "moong-dal", "categoryId": "dal-rice", "name": "Moong Dal", "description": "Light, nourishing yellow lentils with home-style seasoning.", "portion": "Full", "price": 129, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "dal-makhani", "categoryId": "dal-rice", "name": "Dal Makhani", "description": "Slow-cooked black lentils in a rich, creamy preparation.", "portion": "Full", "price": 169, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "plain-rice", "categoryId": "dal-rice", "name": "Plain Rice", "description": "Freshly steamed rice.", "portion": "Full", "price": 80, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "ghee-rice", "categoryId": "dal-rice", "name": "Ghee Rice", "description": "Fragrant rice finished with ghee and gentle spices.", "portion": "Full", "price": 100, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "jeera-rice", "categoryId": "dal-rice", "name": "Jeera Rice", "description": "Fragrant rice tempered with cumin.", "portion": "Full", "price": 150, "image": "food-placeholder.jpeg", "available": true },
+
+    { "id": "masala-dal-khichadi", "categoryId": "khichdi-desserts", "name": "Masala Dal Khichadi", "description": "Rice and lentils cooked with vegetables and warming spices.", "portion": "Full", "price": 139, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "plain-moong-dal-khichadi", "categoryId": "khichdi-desserts", "name": "Plain Moong Dal Khichadi", "description": "A mild, comforting preparation of rice and moong dal.", "portion": "Full", "price": 99, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "palak-khichadi", "categoryId": "khichdi-desserts", "name": "Palak Khichadi", "description": "Rice and lentils cooked with spinach and gentle spices.", "portion": "Full", "price": 149, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "shrikhand", "categoryId": "khichdi-desserts", "name": "Shrikhand", "description": "Creamy strained yogurt dessert flavoured with traditional aromatics.", "portion": "200 gm", "price": 150, "image": "food-placeholder.jpeg", "available": true },
+    { "id": "puran-poli", "categoryId": "khichdi-desserts", "name": "Puran Poli (Pure Ghee)", "description": "Traditional lentil-jaggery flatbread prepared with pure ghee.", "portion": "1 pc", "price": 70, "image": "food-placeholder.jpeg", "available": true }
+  ]
+}
