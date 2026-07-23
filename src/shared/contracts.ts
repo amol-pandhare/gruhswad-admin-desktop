@@ -1,37 +1,51 @@
 import { z } from "zod";
+import type { DatabaseConnectionInfo } from "./environment";
+import type { PushSectionCounts } from "./push-policy";
 
-export const orderStatusSchema = z.enum(["draft", "confirmed", "preparing", "ready", "completed", "cancelled"]);
-export const paymentStatusSchema = z.enum(["unpaid", "partial", "paid", "refunded"]);
-export const fulfilmentSchema = z.enum(["delivery", "pickup"]);
 export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
+export const fulfilmentSchema = z.enum(["delivery", "pickup"]);
+export const orderStatusSchema = z.enum(["draft", "confirmed", "preparing", "ready", "completed", "cancelled"]);
+export const cloudOrderStatusSchema = z.enum(["handoff_created", "customer_confirmed_sent", "confirmed", "preparing", "ready", "completed", "cancelled"]);
 export const orderLineSchema = z.object({ menuItemId: z.string().nullable().optional(), name: z.string().min(1), quantity: z.number().int().min(1).max(1000), unitPrice: z.number().nonnegative() });
-export const orderInputSchema = z.object({
-  id: z.string().optional(), customerName: z.string().min(2), phone: z.string().min(8), serviceDate: dateSchema,
-  fulfilment: fulfilmentSchema, address: z.string().default(""), notes: z.string().default(""), source: z.enum(["manual", "whatsapp", "phone", "walk-in"]).default("manual"),
-  status: orderStatusSchema.default("draft"), lines: z.array(orderLineSchema).min(1),
-});
+export const orderInputSchema = z.object({ id: z.string().optional(), customerName: z.string().min(2), phone: z.string().min(8), serviceDate: dateSchema, fulfilment: fulfilmentSchema, address: z.string().default(""), notes: z.string().default(""), source: z.enum(["manual", "whatsapp", "phone", "walk-in"]).default("manual"), status: orderStatusSchema.default("draft"), lines: z.array(orderLineSchema).min(1) });
 export const expenseInputSchema = z.object({ id: z.string().optional(), date: dateSchema, category: z.string().min(1), description: z.string().min(1), amount: z.number().positive(), paymentMethod: z.string().min(1), notes: z.string().default("") });
 export const paymentInputSchema = z.object({ orderId: z.string(), amount: z.number().positive(), receivedAt: z.string().min(10), method: z.string().min(1), status: z.enum(["received", "refunded"]).default("received") });
-export const publicationSchema = z.object({ date: dateSchema, published: z.boolean(), title: z.string().min(1), itemIds: z.array(z.string()).min(1), featuredItemId: z.string().nullable(), orderCutoff: z.string().min(1), whatsapp: z.string().min(8) }).superRefine((data, ctx) => {
-  if (new Set(data.itemIds).size !== data.itemIds.length) ctx.addIssue({ code: "custom", message: "Duplicate menu items are not allowed." });
-  if (data.featuredItemId && !data.itemIds.includes(data.featuredItemId)) ctx.addIssue({ code: "custom", message: "Featured item must be selected." });
-});
+
+export const bundleChoiceSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), itemId: z.string(), name: z.string().default(""), upgradePrice: z.number().nonnegative(), available: z.boolean(), order: z.number().int().nonnegative() });
+export const bundleGroupSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string().min(1), minChoices: z.number().int().nonnegative(), maxChoices: z.number().int().nonnegative(), order: z.number().int().nonnegative(), choices: z.array(bundleChoiceSchema) }).superRefine((group, ctx) => { if (group.maxChoices < group.minChoices || group.maxChoices > group.choices.length) ctx.addIssue({ code: "custom", message: "Choice limits do not match the available choices." }); });
+export const catalogItemSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), categoryId: z.string().min(1), type: z.enum(["dish", "combo", "thali"]), name: z.string().min(1), description: z.string().default(""), portion: z.string().default(""), price: z.number().nonnegative(), image: z.string().nullable().optional(), available: z.boolean(), isNew: z.boolean(), archived: z.boolean(), webCompatible: z.boolean().default(true), tags: z.array(z.string()).default([]), order: z.number().int().nonnegative(), bundleGroups: z.array(bundleGroupSchema).default([]) });
+export const siteSchema = z.object({ brandName: z.string().min(1), tagline: z.string(), mobile: z.string().regex(/^\d{10}$/), orderCutoff: z.string().min(1) });
+export const operationsSchema = z.object({ open: z.boolean(), message: z.string(), pickupEnabled: z.boolean(), deliveryEnabled: z.boolean() });
+export const serviceAreaSchema = z.object({ pickupCities: z.array(z.string()), pickupState: z.string(), pickupCountry: z.string(), kitchenPlaceId: z.string(), kitchenLatitude: z.number().nullable(), kitchenLongitude: z.number().nullable(), deliveryRadiusKm: z.number().positive() });
+export const orderingPlatformSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string().min(1), description: z.string(), url: z.string(), status: z.enum(["available", "coming-soon", "hidden"]), order: z.number().int().nonnegative() });
+export const publicLocationSchema = z.object({ enabled: z.boolean(), name: z.string(), address: z.string(), mapQuery: z.string(), googleMapsUrl: z.string(), directions: z.string() });
+export const runtimeConfigSchema = z.object({ site: siteSchema, operations: operationsSchema, serviceArea: serviceAreaSchema, orderingPlatforms: z.array(orderingPlatformSchema), publicLocation: publicLocationSchema });
+export const publicationSchema = z.object({ date: dateSchema, published: z.boolean(), title: z.string().min(1), itemIds: z.array(z.string()).min(1), featuredItemId: z.string().nullable(), orderCutoff: z.string().min(1) }).superRefine((data, ctx) => { if (new Set(data.itemIds).size !== data.itemIds.length) ctx.addIssue({ code: "custom", message: "Duplicate menu items are not allowed." }); if (data.featuredItemId && !data.itemIds.includes(data.featuredItemId)) ctx.addIssue({ code: "custom", message: "Featured item must be selected." }); });
 
 export type OrderInput = z.infer<typeof orderInputSchema>;
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
+export type CatalogItem = z.infer<typeof catalogItemSchema>;
+export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 export type Publication = z.infer<typeof publicationSchema>;
 export type DateRange = { from: string; to: string };
 export type Dashboard = { revenue: number; expenses: number; profit: number; orderCount: number; outstanding: number; averageOrder: number; recentOrders: Record<string, unknown>[]; expenseByCategory: { category: string; total: number }[] };
+export type SyncPreview = { inserts: number; updates: number; conflicts: number; dirty: number; entities: { type: string; id: string; action: string }[] };
+export type PushPreview = SyncPreview & { pushableDirty: number; excludedDirty: number; sections: PushSectionCounts };
+export type SyncStatus = { online: boolean; dirty: number; conflicts: number; lastPull: string | null; lastPush: string | null; runs: any[]; connection: DatabaseConnectionInfo };
+export type MenuPdfExportResult = { canceled: boolean; path: string | null; pageCount: number; warning: string | null };
 
 export type AdminApi = {
   dashboard(range: DateRange): Promise<Dashboard>;
   orders: { list(range?: DateRange): Promise<any[]>; save(input: OrderInput): Promise<string>; updateStatus(id: string, status: z.infer<typeof orderStatusSchema>): Promise<void>; addPayment(input: PaymentInput): Promise<void> };
   expenses: { list(range?: DateRange): Promise<any[]>; save(input: ExpenseInput): Promise<string>; remove(id: string): Promise<void> };
-  menu: { catalog(): Promise<{ categories: any[]; items: any[] }>; history(): Promise<any[]>; publish(input: Publication): Promise<void> };
+  catalog: { get(): Promise<{ categories: any[]; items: CatalogItem[] }>; save(item: CatalogItem): Promise<void>; archive(id: string, archived: boolean): Promise<void>; exportPdf(): Promise<MenuPdfExportResult> };
+  operations: { get(): Promise<RuntimeConfig>; save(input: RuntimeConfig): Promise<void> };
+  menu: { catalog(): Promise<{ categories: any[]; items: CatalogItem[] }>; history(): Promise<any[]>; getCurrent(): Promise<Publication | null>; publish(input: Publication): Promise<void> };
+  cloudOrders: { list(query?: string): Promise<any[]>; detail(id: string): Promise<any>; updateStatus(id: string, status: z.infer<typeof cloudOrderStatusSchema>): Promise<void> };
+  sync: { status(): Promise<SyncStatus>; previewPull(): Promise<SyncPreview>; pull(): Promise<SyncPreview>; previewPush(): Promise<PushPreview>; push(): Promise<PushPreview>; conflicts(): Promise<any[]>; resolve(id: string, resolution: "local" | "neon"): Promise<void>; history(): Promise<any[]>; onStartupPullComplete(callback: () => void): () => void; onStartupPullSettled(callback: () => void): () => void };
   reports: { exportCsv(kind: "orders" | "expenses" | "summary", range: DateRange): Promise<string | null> };
   inbox: { list(): Promise<any[]>; sync(): Promise<{ imported: number; unmatched: number }>; createOrder(importId: string): Promise<string> };
-  settings: { get(): Promise<Record<string, string>>; set(values: Record<string, string>, secrets?: Record<string, string>): Promise<void>; backup(): Promise<string | null>; restore(): Promise<boolean> };
+  settings: { get(): Promise<Record<string, string | boolean>>; set(values: Record<string, string>, secrets?: Record<string, string>): Promise<void>; backup(): Promise<string | null>; restore(): Promise<boolean> };
   updates: { check(): Promise<void>; install(): Promise<void>; onStatus(callback: (status: string) => void): () => void };
 };

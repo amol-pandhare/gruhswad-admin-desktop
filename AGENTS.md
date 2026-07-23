@@ -4,13 +4,13 @@
 
 - This repository is the independent Electron operations application at `C:\Workspace\gruhswad-admin-desktop`.
 - Treat `C:\Workspace\gruhswad` as read-only. Never implement desktop work by editing the web project.
-- The only supported web integration is the existing Neon `menu_publications` row with `publication_key = "current"` and the `PublishedMenu` JSON contract defined in `src/shared/contracts.ts`.
+- Supported web integration is explicit Neon synchronization for catalog, runtime settings, current publication, and cloud order data using `src/shared/contracts.ts`.
 - Never commit credentials, `.env` files, SQLite databases, encrypted backups, signing certificates, Meta webhook payloads, `out`, `release`, or `node_modules`.
 
 ## Stack and repository layout
 
 - Electron 37, React 19, TypeScript, Electron Vite, SQLite through `better-sqlite3`, Drizzle schemas, Zod validation, Vitest, and Electron Builder.
-- `src/main` is the trusted Electron process: database initialization, repositories, IPC handlers, Neon publishing, encrypted backups, CSV exports, inbox synchronization, and updates.
+- `src/main` is the trusted Electron process: migrations, repositories, synchronization and conflict logic, IPC handlers, encrypted backups, CSV exports, inbox synchronization, and updates.
 - `src/preload` is the sole renderer bridge. Expose only typed allowlisted methods from `AdminApi`; never expose `ipcRenderer` or Node APIs.
 - `src/renderer` is a sandboxed React application with no Node access. Operational content must come from the preload API rather than hardcoded records.
 - `src/shared` owns cross-process contracts and pure business logic. Keep publication, order, expense, payment, date-range, and parser validation here.
@@ -31,7 +31,10 @@
 
 ## Data and behavior rules
 
-- SQLite in Electron's per-user data directory is the authoritative source for orders, payments, expenses, menu records, publications, settings, and imported messages.
+- Neon is authoritative for web orders and synchronized Gruhswad business data. SQLite is the durable offline cache and remains authoritative for desktop-only finance records.
+- Pull and push are separate explicit user actions. Never add automatic background push.
+- Preserve dirty records during pull, use optimistic concurrency during push, and require explicit conflict resolution.
+- Expenses, payments, manual orders, reports, and WhatsApp imports are local-only and must never enter a Neon push.
 - Database changes require a new numbered migration. Never rewrite a migration that may have shipped. Keep foreign keys enabled and preserve WAL mode.
 - Validate renderer input at IPC boundaries with Zod even if the form already validates it.
 - Cash-basis revenue includes received payments minus refunds. Profit is cash revenue minus expenses recorded within the selected period.
@@ -39,7 +42,7 @@
 - Store connection secrets with Electron `safeStorage`. Do not return decrypted secrets to the renderer. Preserve previously stored secrets when a settings field is left blank.
 - Before restoring a backup, decrypt it, run SQLite integrity validation, and verify the migration table. Apply a valid staged restore only on restart.
 - Publish only available, web-compatible item IDs. The featured item must belong to the selected set, and duplicate IDs are invalid.
-- Use separate least-privilege Neon roles: the desktop role for `menu_publications`, and the webhook role for `whatsapp_inbox`.
+- Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
 
 ## Development workflow
 
