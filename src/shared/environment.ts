@@ -6,12 +6,14 @@ export type DatabaseConnectionSource = "settings" | "environment-local" | "envir
 export type DatabaseConnectionInfo = { environment: RuntimeEnvironment; source: DatabaseConnectionSource; configured: boolean; error?: string };
 export type ResolvedDatabaseConnection = DatabaseConnectionInfo & { url: string };
 
-type ResolveInput = { processEnv?: Record<string, string | undefined>; fileEnv?: Record<string, string | undefined>; storedUrl?: string };
+declare const __BUILD_APP_ENV__: string | undefined;
+const compiledEnvironment = typeof __BUILD_APP_ENV__ === "undefined" ? undefined : __BUILD_APP_ENV__;
+type ResolveInput = { processEnv?: Record<string, string | undefined>; fileEnv?: Record<string, string | undefined>; storedUrl?: string; buildEnv?: string };
 
 export function resolveDatabaseConnection(input: ResolveInput): ResolvedDatabaseConnection {
   const processEnv = input.processEnv ?? {};
   const fileEnv = input.fileEnv ?? {};
-  const selected = processEnv.APP_ENV ?? fileEnv.APP_ENV ?? "local";
+  const selected = processEnv.APP_ENV ?? fileEnv.APP_ENV ?? input.buildEnv ?? compiledEnvironment ?? "local";
   const environment = runtimeEnvironmentSchema.parse(selected);
   const storedUrl = input.storedUrl?.trim();
   if (storedUrl) return { environment, source: "settings", configured: true, url: storedUrl };

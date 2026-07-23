@@ -7,6 +7,8 @@ jobs:
   build:
     strategy: { fail-fast: false, matrix: { os: [windows-latest, macos-latest] } }
     runs-on: ${{ matrix.os }}
+    env:
+      APP_ENV: prod
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -16,12 +18,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
+      - if: runner.os == 'Windows'
+        run: pnpm icons:win
+      - if: runner.os == 'macOS'
+        run: bash scripts/generate-mac-icon.sh
       - run: pnpm build
       - run: pnpm exec electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE || secrets.WINDOWS_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE_PASSWORD || secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ (matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE != '') || (matrix.os == 'windows-latest' && secrets.WINDOWS_CERTIFICATE != '') }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

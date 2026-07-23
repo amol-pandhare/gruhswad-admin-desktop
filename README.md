@@ -43,7 +43,18 @@ Open **Catalog** and use **Export menu PDF** at the upper-left. The export reads
 
 ## Releases
 
-Replace the GitHub owner in `package.json`, add signing and Apple notarization secrets documented in `.github/workflows/release.yml`, then push a `v*` tag. GitHub Actions builds signed Windows and macOS artifacts and publishes the update metadata consumed by `electron-updater`.
+Release builds embed `APP_ENV=prod` as their default environment but never bundle `.env` or a Neon URL. On first launch, open **Settings**, enter the least-privilege production Neon URL, and save it to the operating-system credential vault. An external runtime `APP_ENV` or `.env` can still intentionally override the packaged default.
+
+To create the unsigned Windows installer locally:
+
+```powershell
+$env:APP_ENV="prod"
+pnpm.cmd dist
+```
+
+Artifacts are written to `release/`, including the NSIS installer, block map and `latest.yml`. Windows SmartScreen may warn because version 0.2.0 is unsigned.
+
+Pushing a `v*` tag runs `.github/workflows/release.yml` with `APP_ENV=prod`, builds Windows NSIS plus macOS DMG/ZIP artifacts, and publishes the update metadata consumed by `electron-updater`. Unsigned macOS builds trigger Gatekeeper; users must explicitly approve the application. Add `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`, `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` repository secrets to enable signing and notarization in a future release.
 
 ## Commands
 

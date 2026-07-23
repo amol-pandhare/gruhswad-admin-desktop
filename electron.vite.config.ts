@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 
 export default defineConfig({
-  main: { plugins: [externalizeDepsPlugin()] },
+  main: { plugins: [externalizeDepsPlugin()], define: { __BUILD_APP_ENV__: JSON.stringify(process.env.APP_ENV === "prod" ? "prod" : "local") } },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: { rollupOptions: { output: { format: "cjs", entryFileNames: "[name].cjs" } } },
