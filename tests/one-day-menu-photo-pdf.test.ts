@@ -1,0 +1,18 @@
+import { describe,expect,it } from "vitest";
+import { buildPhotoMenuPdfDocument } from "../src/main/one-day-menu-photo-pdf";
+import type { CatalogCategory,CatalogItem,Publication,RuntimeConfig } from "../src/shared/contracts";
+
+const categories:CatalogCategory[]=Array.from({length:6},(_,index)=>({id:`category-${index}`,name:`Category ${index}`,order:index,active:true}));
+const item=(id:string,categoryId="category-0",overrides:Partial<CatalogItem>={}):CatalogItem=>({id,categoryId,type:"dish",name:`Dish ${id}`,description:`Description for ${id}`,portion:"1 plate",price:100,image:`${id}.jpg`,available:true,isNew:false,archived:false,webCompatible:true,tags:[],order:1,bundleGroups:[],...overrides});
+const config:RuntimeConfig={site:{brandName:"Gruhswad",tagline:"Taste of Home",mobile:"8123415647",orderCutoff:"Order before 9 PM"},operations:{open:true,message:"",pickupEnabled:true,deliveryEnabled:false},serviceArea:{pickupCities:["Bengaluru"],pickupState:"Karnataka",pickupCountry:"India",kitchenPlaceId:"",kitchenLatitude:null,kitchenLongitude:null,deliveryRadiusKm:5},orderingPlatforms:[],publicLocation:{enabled:false,name:"",address:"",mapQuery:"",googleMapsUrl:"",directions:""}};
+const publication=(items:CatalogItem[],featuredItemId:string|null=items[0]?.id??null):Publication=>({date:"2026-07-25",published:true,title:"Today's Photo Menu",itemIds:items.map((value)=>value.id),featuredItemId,orderCutoff:"Order today by 9 PM"});
+const build=(items:CatalogItem[],featuredItemId:string|null=items[0]?.id??null)=>buildPhotoMenuPdfDocument({publication:publication(items,featuredItemId),categories,items,config,logoUrl:"file:///logo.png",resolveImage:(image)=>image?`file:///${image}`:"file:///placeholder.jpg"});
+
+describe("photo-rich one-day menu PDF",()=>{
+  it("renders the featured dish once as a hero with its image, description, price, and label",()=>{const result=build([item("special")]);expect(result.html).toContain("TODAY'S SPECIAL ITEM");expect(result.html.match(/file:\/\/\/special\.jpg/g)).toHaveLength(1);expect(result.html).toContain("Description for special");expect(result.html).toContain("&#8377;100");});
+  it("uses one image for every category section",()=>{const items=[item("chaat","category-0"),item("starter","category-1"),item("bread","category-2")];const result=build(items,null);expect(result.html.match(/class=\"photo-category\"/g)).toHaveLength(3);for(const value of items)expect(result.html).toContain(`file:///${value.image}`);});
+  it("uses the resolver fallback when a category item has no image",()=>{const result=build([item("plain","category-0",{image:null})],null);expect(result.html).toContain("file:///placeholder.jpg");});
+  it("omits invalid selected items and invalid featured content",()=>{const items=[item("valid"),item("archived","category-1",{archived:true})];const result=build(items,"archived");expect(result.omittedItemCount).toBe(1);expect(result.html).not.toContain("TODAY'S SPECIAL ITEM");expect(result.html).not.toContain("Dish archived");});
+  it("creates continuation pages after five category sections",()=>{const items=categories.map((category,index)=>item(`item-${index}`,category.id));const result=build(items,null);expect(result.pageCount).toBe(2);expect(result.html).toContain("photo-page continuation");});
+  it("rejects a saved menu with no printable items",()=>expect(()=>buildPhotoMenuPdfDocument({publication:{...publication([],null),itemIds:["missing"]},categories,items:[],config,resolveImage:()=>"file:///placeholder.jpg"})).toThrow("no printable items"));
+});

@@ -1,9 +1,10 @@
-import { BrowserWindow, dialog } from "electron";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dialog } from "electron";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getCatalog, getRuntimeConfig } from "./database";
 import type { CatalogItem, MenuPdfExportResult } from "../shared/contracts";
+import { renderHtmlPdfToPath } from "./pdf-renderer";
 
 type Category = { id: string; name: string; order: number; active?: boolean | number };
 
@@ -103,7 +104,7 @@ function categoryGrid(categories: Category[], items: CatalogItem[]) {
 export function buildMenuPdfHtml() {
   const catalog = getCatalog();
   const config = getRuntimeConfig();
-  const items = catalog.items.filter((item) => !item.archived).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const items = catalog.items.filter((item) => !item.archived && item.available && item.webCompatible).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   const categories = (catalog.categories as Category[])
     .filter((category) => category.active !== false && category.active !== 0 && items.some((item) => item.categoryId === category.id))
     .sort((a, b) => a.order - b.order);
@@ -148,26 +149,8 @@ export function buildMenuPdfHtml() {
   </style></head><body>${pageHtml}</body></html>`;
 }
 
-function withTimeout<T>(promise: Promise<T>, message: string) {
-  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), 30000))]);
-}
-
 export async function renderMenuPdfToPath(outputPath: string): Promise<MenuPdfExportResult> {
-  const html = buildMenuPdfHtml();
-  const temp = join(dirname(outputPath), `.gruhswad-menu-${Date.now()}.html`);
-  writeFileSync(temp, html, "utf8");
-  const printWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true } });
-  try {
-    await withTimeout(printWindow.loadFile(temp), "The menu preview could not be prepared within 30 seconds.");
-    await new Promise<void>((resolve) => setTimeout(resolve, 400));
-    const buffer = await withTimeout(printWindow.webContents.printToPDF({ pageSize: "A4", landscape: false, printBackground: true, margins: { top: 0, bottom: 0, left: 0, right: 0 } }), "PDF generation did not finish within 30 seconds.");
-    writeFileSync(outputPath, buffer);
-    const pageCount = (buffer.toString("latin1").match(/\/Type\s*\/Page\b/g) || []).length;
-    return { canceled: false, path: outputPath, pageCount, warning: pageCount > 2 ? `The catalog required ${pageCount} pages to remain readable.` : null };
-  } finally {
-    printWindow.destroy();
-    rmSync(temp, { force: true });
-  }
+  return renderHtmlPdfToPath({ html: buildMenuPdfHtml(), outputPath, tempPrefix: "gruhswad-menu", warning: (pageCount) => pageCount > 2 ? `The catalog required ${pageCount} pages to remain readable.` : null });
 }
 
 export async function exportMenuPdf(): Promise<MenuPdfExportResult> {

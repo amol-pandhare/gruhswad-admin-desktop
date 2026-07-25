@@ -2,11 +2,13 @@ import { join } from "node:path";
 import { existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { app, BrowserWindow, ipcMain } from "electron";
 import updater from "electron-updater";
-import { catalogItemSchema, cloudOrderStatusSchema, expenseInputSchema, orderInputSchema, orderStatusSchema, paymentInputSchema, publicationSchema, runtimeConfigSchema, type DateRange } from "../shared/contracts";
-import { addPayment, archiveCatalogItem, cloudOrderDetail, dashboard, getCatalog, getCurrentPublication, getRuntimeConfig, getSettings, initializeDatabase, listCloudOrders, listExpenses, listInbox, listOrders, publicationHistory, removeExpense, saveCatalogItem, saveExpense, saveOrder, saveRuntimeConfig, setSettings, updateCloudOrderStatus, updateOrderStatus } from "./database";
+import { catalogCategorySchema, catalogItemSchema, cloudOrderStatusSchema, expenseInputSchema, orderInputSchema, orderStatusSchema, paymentInputSchema, publicationSchema, runtimeConfigSchema, type DateRange } from "../shared/contracts";
+import { addPayment, archiveCatalogItem, cloudOrderDetail, dashboard, getCatalog, getCurrentPublication, getRuntimeConfig, getSettings, initializeDatabase, listCloudOrders, listExpenses, listInbox, listOrders, publicationHistory, removeExpense, saveCatalogCategory, saveCatalogItem, saveCatalogItemCompatibility, saveExpense, saveOrder, saveRuntimeConfig, setCatalogCategoryActive, setSettings, updateCloudOrderStatus, updateOrderStatus, validateCatalogItemReferences } from "./database";
 import { backupDatabase, databaseConnection, exportCsv, loadSecrets, loadStoredSecrets, publishToGruhswad, restoreDatabase, saveSecrets, syncInbox } from "./services";
 import { listConflicts, previewPull, previewPush, pullFromNeon, pushToNeon, resolveConflict, syncHistory, syncStatus } from "./sync-engine";
 import { exportMenuPdf } from "./menu-pdf";
+import { exportOneDayMenuPdf } from "./one-day-menu-pdf";
+import { exportPhotoOneDayMenuPdf } from "./one-day-menu-photo-pdf";
 
 let window:BrowserWindow|null=null;
 const { autoUpdater } = updater;
@@ -15,9 +17,10 @@ function registerIpc(){
   ipcMain.handle("dashboard",(_e,range:DateRange)=>dashboard(range));
   ipcMain.handle("orders:list",(_e,range?:DateRange)=>listOrders(range)); ipcMain.handle("orders:save",(_e,input)=>saveOrder(orderInputSchema.parse(input))); ipcMain.handle("orders:status",(_e,id,status)=>updateOrderStatus(id,orderStatusSchema.parse(status))); ipcMain.handle("orders:payment",(_e,input)=>addPayment(paymentInputSchema.parse(input)));
   ipcMain.handle("expenses:list",(_e,range?:DateRange)=>listExpenses(range)); ipcMain.handle("expenses:save",(_e,input)=>saveExpense(expenseInputSchema.parse(input))); ipcMain.handle("expenses:remove",(_e,id)=>removeExpense(id));
-  ipcMain.handle("catalog:get",()=>getCatalog());ipcMain.handle("catalog:save",(_e,input)=>saveCatalogItem(catalogItemSchema.parse(input)));ipcMain.handle("catalog:archive",(_e,id,archived)=>archiveCatalogItem(String(id),Boolean(archived)));ipcMain.handle("catalog:export-pdf",()=>exportMenuPdf());
+  ipcMain.handle("catalog:get",()=>getCatalog());ipcMain.handle("catalog:save",(_e,input)=>{const item=catalogItemSchema.parse(input);validateCatalogItemReferences(item);saveCatalogItem(item);saveCatalogItemCompatibility(item.id,item.webCompatible);});ipcMain.handle("catalog:archive",(_e,id,archived)=>archiveCatalogItem(String(id),Boolean(archived)));ipcMain.handle("catalog:export-pdf",()=>exportMenuPdf());
+  ipcMain.handle("catalog:category-save",(_e,input)=>saveCatalogCategory(catalogCategorySchema.parse(input)));ipcMain.handle("catalog:category-active",(_e,id,active)=>setCatalogCategoryActive(String(id),Boolean(active)));
   ipcMain.handle("operations:get",()=>getRuntimeConfig());ipcMain.handle("operations:save",(_e,input)=>saveRuntimeConfig(runtimeConfigSchema.parse(input)));
-  ipcMain.handle("menu:catalog",()=>getCatalog()); ipcMain.handle("menu:history",()=>publicationHistory());ipcMain.handle("menu:current",()=>getCurrentPublication()); ipcMain.handle("menu:publish",(_e,input)=>publishToGruhswad(publicationSchema.parse(input)));
+  ipcMain.handle("menu:catalog",()=>getCatalog()); ipcMain.handle("menu:history",()=>publicationHistory());ipcMain.handle("menu:current",()=>getCurrentPublication()); ipcMain.handle("menu:publish",(_e,input)=>publishToGruhswad(publicationSchema.parse(input)));ipcMain.handle("menu:export-pdf",()=>exportOneDayMenuPdf());ipcMain.handle("menu:export-photo-pdf",()=>exportPhotoOneDayMenuPdf());
   ipcMain.handle("cloud-orders:list",(_e,query)=>listCloudOrders(String(query??"")));ipcMain.handle("cloud-orders:detail",(_e,id)=>cloudOrderDetail(String(id)));ipcMain.handle("cloud-orders:status",(_e,id,status)=>updateCloudOrderStatus(String(id),cloudOrderStatusSchema.parse(status)));
   ipcMain.handle("sync:status",()=>syncStatus());ipcMain.handle("sync:preview-pull",()=>previewPull());ipcMain.handle("sync:pull",()=>pullFromNeon());ipcMain.handle("sync:preview-push",()=>previewPush());ipcMain.handle("sync:push",()=>pushToNeon());ipcMain.handle("sync:conflicts",()=>listConflicts());ipcMain.handle("sync:resolve",(_e,id,resolution)=>resolveConflict(String(id),resolution));ipcMain.handle("sync:history",()=>syncHistory());
   ipcMain.handle("inbox:list",()=>listInbox()); ipcMain.handle("inbox:sync",()=>syncInbox());

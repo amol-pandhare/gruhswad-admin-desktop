@@ -13,7 +13,9 @@ export const paymentInputSchema = z.object({ orderId: z.string(), amount: z.numb
 
 export const bundleChoiceSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), itemId: z.string(), name: z.string().default(""), upgradePrice: z.number().nonnegative(), available: z.boolean(), order: z.number().int().nonnegative() });
 export const bundleGroupSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string().min(1), minChoices: z.number().int().nonnegative(), maxChoices: z.number().int().nonnegative(), order: z.number().int().nonnegative(), choices: z.array(bundleChoiceSchema) }).superRefine((group, ctx) => { if (group.maxChoices < group.minChoices || group.maxChoices > group.choices.length) ctx.addIssue({ code: "custom", message: "Choice limits do not match the available choices." }); });
-export const catalogItemSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), categoryId: z.string().min(1), type: z.enum(["dish", "combo", "thali"]), name: z.string().min(1), description: z.string().default(""), portion: z.string().default(""), price: z.number().nonnegative(), image: z.string().nullable().optional(), available: z.boolean(), isNew: z.boolean(), archived: z.boolean(), webCompatible: z.boolean().default(true), tags: z.array(z.string()).default([]), order: z.number().int().nonnegative(), bundleGroups: z.array(bundleGroupSchema).default([]) });
+export const catalogCategorySchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string().trim().min(1), order: z.number().int().nonnegative(), active: z.boolean() });
+export const catalogImageSchema = z.string().trim().regex(/^[^\\/:*?"<>|]+\.(?:avif|gif|jpe?g|png|webp)$/i, "Use a local image asset filename such as dish.jpg.").nullable().optional();
+export const catalogItemSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), categoryId: z.string().min(1), type: z.enum(["dish", "combo", "thali"]), name: z.string().trim().min(1), description: z.string().default(""), portion: z.string().default(""), price: z.number().nonnegative(), image: catalogImageSchema, available: z.boolean(), isNew: z.boolean(), archived: z.boolean(), webCompatible: z.boolean().default(true), tags: z.array(z.string()).default([]), order: z.number().int().nonnegative(), bundleGroups: z.array(bundleGroupSchema).default([]) });
 export const siteSchema = z.object({ brandName: z.string().min(1), tagline: z.string(), mobile: z.string().regex(/^\d{10}$/), orderCutoff: z.string().min(1) });
 export const operationsSchema = z.object({ open: z.boolean(), message: z.string(), pickupEnabled: z.boolean(), deliveryEnabled: z.boolean() });
 export const serviceAreaSchema = z.object({ pickupCities: z.array(z.string()), pickupState: z.string(), pickupCountry: z.string(), kitchenPlaceId: z.string(), kitchenLatitude: z.number().nullable(), kitchenLongitude: z.number().nullable(), deliveryRadiusKm: z.number().positive() });
@@ -26,6 +28,7 @@ export type OrderInput = z.infer<typeof orderInputSchema>;
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
 export type CatalogItem = z.infer<typeof catalogItemSchema>;
+export type CatalogCategory = z.infer<typeof catalogCategorySchema>;
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 export type Publication = z.infer<typeof publicationSchema>;
 export type DateRange = { from: string; to: string };
@@ -39,9 +42,9 @@ export type AdminApi = {
   dashboard(range: DateRange): Promise<Dashboard>;
   orders: { list(range?: DateRange): Promise<any[]>; save(input: OrderInput): Promise<string>; updateStatus(id: string, status: z.infer<typeof orderStatusSchema>): Promise<void>; addPayment(input: PaymentInput): Promise<void> };
   expenses: { list(range?: DateRange): Promise<any[]>; save(input: ExpenseInput): Promise<string>; remove(id: string): Promise<void> };
-  catalog: { get(): Promise<{ categories: any[]; items: CatalogItem[] }>; save(item: CatalogItem): Promise<void>; archive(id: string, archived: boolean): Promise<void>; exportPdf(): Promise<MenuPdfExportResult> };
+  catalog: { get(): Promise<{ categories: CatalogCategory[]; items: CatalogItem[] }>; save(item: CatalogItem): Promise<void>; archive(id: string, archived: boolean): Promise<void>; saveCategory(category: CatalogCategory): Promise<void>; setCategoryActive(id: string, active: boolean): Promise<void>; exportPdf(): Promise<MenuPdfExportResult> };
   operations: { get(): Promise<RuntimeConfig>; save(input: RuntimeConfig): Promise<void> };
-  menu: { catalog(): Promise<{ categories: any[]; items: CatalogItem[] }>; history(): Promise<any[]>; getCurrent(): Promise<Publication | null>; publish(input: Publication): Promise<void> };
+  menu: { catalog(): Promise<{ categories: CatalogCategory[]; items: CatalogItem[] }>; history(): Promise<any[]>; getCurrent(): Promise<Publication | null>; publish(input: Publication): Promise<void>; exportPdf(): Promise<MenuPdfExportResult>; exportPhotoPdf(): Promise<MenuPdfExportResult> };
   cloudOrders: { list(query?: string): Promise<any[]>; detail(id: string): Promise<any>; updateStatus(id: string, status: z.infer<typeof cloudOrderStatusSchema>): Promise<void> };
   sync: { status(): Promise<SyncStatus>; previewPull(): Promise<SyncPreview>; pull(): Promise<SyncPreview>; previewPush(): Promise<PushPreview>; push(): Promise<PushPreview>; conflicts(): Promise<any[]>; resolve(id: string, resolution: "local" | "neon"): Promise<void>; history(): Promise<any[]>; onStartupPullComplete(callback: () => void): () => void; onStartupPullSettled(callback: () => void): () => void };
   reports: { exportCsv(kind: "orders" | "expenses" | "summary", range: DateRange): Promise<string | null> };

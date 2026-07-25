@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import type { CatalogItem } from "../shared/contracts";
 
 const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
-const imageUrl = (image?: string | null) => image?.startsWith("http") ? image : `./catalog/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
+const imageUrl = (image?: string | null) => `./catalog/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
 
 export function CatalogEditorModal({ item, categories, items, onClose, onSave, notify }: { item: CatalogItem; categories: any[]; items: CatalogItem[]; onClose(): void; onSave(item: CatalogItem): Promise<void>; notify(message: string): void }) {
   const [draft, setDraft] = useState(item); const [saving, setSaving] = useState(false); const initial=useRef(JSON.stringify(item));
-  const dishes=items.filter((entry)=>entry.type==="dish"&&!entry.archived&&entry.id!==draft.id);
+  const dishes=items.filter((entry)=>entry.type==="dish"&&!entry.archived&&entry.available&&entry.id!==draft.id);
   useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key==="Escape")close();};window.addEventListener("keydown",escape);return()=>window.removeEventListener("keydown",escape);},[draft]);
   function close(){if(JSON.stringify(draft)!==initial.current&&!confirm("Discard your unsaved catalog changes?"))return;onClose();}
   function updateGroup(id:string, update:(group:CatalogItem["bundleGroups"][number])=>CatalogItem["bundleGroups"][number]){setDraft((current)=>({...current,bundleGroups:current.bundleGroups.map((group)=>group.id===id?update(group):group)}));}

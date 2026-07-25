@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { parseStructuredOrder } from "../shared/whatsapp";
 import type { DateRange, Publication } from "../shared/contracts";
 import { resolveDatabaseConnection, type DatabaseConnectionInfo } from "../shared/environment";
-import { addInbox, dashboard, finishInbox, getSettings, listCloudOrdersForRange, listExpenses, rawDatabase, saveOrder, savePublication, setSettings } from "./database";
+import { addInbox, dashboard, finishInbox, getSettings, listCloudOrdersForRange, listExpenses, rawDatabase, saveOrder, savePublication, setSettings, validatePublicationCatalog } from "./database";
 
 const secretFile = () => `${app.getPath("userData")}/secrets.bin`;
 export function saveSecrets(values: Record<string,string>) { if (!safeStorage.isEncryptionAvailable()) throw new Error("OS encryption is unavailable."); writeFileSync(secretFile(), safeStorage.encryptString(JSON.stringify(values))); }
@@ -30,7 +30,7 @@ export function databaseConnection() { return resolveDatabaseConnection({ proces
 export function databaseConnectionInfo():DatabaseConnectionInfo { try { const { environment, source, configured } = databaseConnection(); return { environment, source, configured }; } catch (error) { return { environment: "local", source: "none", configured: false, error: error instanceof Error ? error.message : String(error) }; } }
 export function loadSecrets():Record<string,string> { const stored=storedSecrets();let neonDatabaseUrl="";try{neonDatabaseUrl=databaseConnection().url;}catch{}return { ...stored, neonDatabaseUrl }; }
 
-export async function publishToGruhswad(payload: Publication) { savePublication(payload); }
+export async function publishToGruhswad(payload: Publication) { validatePublicationCatalog(payload); savePublication(payload); }
 export async function syncInbox() {
   const settings=getSettings(), secrets=loadSecrets(); if(!settings.webhookUrl||!secrets.inboxToken) throw new Error("Configure webhook URL and inbox token.");
   const response=await fetch(`${settings.webhookUrl.replace(/\/$/,"")}/api/inbox`,{headers:{Authorization:`Bearer ${secrets.inboxToken}`}}); if(!response.ok) throw new Error(`Inbox sync failed (${response.status}).`);
