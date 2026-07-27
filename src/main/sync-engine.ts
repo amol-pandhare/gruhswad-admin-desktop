@@ -4,6 +4,7 @@ import { catalogItemSchema, publicationSchema, runtimeConfigSchema, type PushPre
 import { normalizeServiceDate, normalizeTimestamp } from "../shared/dates";
 import { classifyPushCandidates, emptyPushSectionCounts, pushSectionFor, pushSectionLabels, pushSectionKeys, type PushSectionCounts } from "../shared/push-policy";
 import { normalizeRuntimeSetting } from "../shared/runtime-config";
+import { syncAttentionFromCounts } from "../shared/sync-attention";
 import { getCatalog, getCurrentPublication, getRuntimeConfig, rawDatabase } from "./database";
 import { databaseConnection, databaseConnectionInfo, loadSecrets } from "./services";
 
@@ -94,6 +95,11 @@ export function previewPush():PushPreview {
       ...classified.excluded.map(({type,id}) => ({type,id,action:"excluded"})),
     ],
   };
+}
+
+export function syncAttention() {
+  const conflicts = (rawDatabase().prepare("SELECT COUNT(*) count FROM sync_conflicts WHERE resolved_at IS NULL").get() as { count: number }).count;
+  return syncAttentionFromCounts(conflicts, previewPush().pushableDirty);
 }
 
 function auditSummary(sections:PushSectionCounts, excluded:number) {

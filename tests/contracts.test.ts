@@ -8,6 +8,14 @@ import { normalizeServiceDate, normalizeTimestamp } from "../src/shared/dates";
 import { classifyPushCandidates, pushSectionFor } from "../src/shared/push-policy";
 import { normalizeRuntimeSetting, runtimeConfigFromSettings } from "../src/shared/runtime-config";
 import { normalizeCloudOrderLine } from "../src/shared/order-detail";
+import { exitWarningCopy, syncAttentionFromCounts } from "../src/shared/sync-attention";
+
+describe("sync attention and exit warnings",()=>{
+  it("requires attention only for conflicts or pushable dirty records",()=>{expect(syncAttentionFromCounts(0,0)).toEqual({conflicts:0,pushableDirty:0,requiresAttention:false});expect(syncAttentionFromCounts(1,0).requiresAttention).toBe(true);expect(syncAttentionFromCounts(0,2).requiresAttention).toBe(true);});
+  it("prioritizes conflict wording when both conditions exist",()=>{const copy=exitWarningCopy(syncAttentionFromCounts(2,3));expect(copy.title).toBe("Unresolved sync conflicts");expect(copy.message).toContain("2 sync conflicts");});
+  it("uses pending-cloud wording for dirty-only state",()=>{const copy=exitWarningCopy(syncAttentionFromCounts(0,1));expect(copy.title).toBe("Cloud update pending");expect(copy.message).toContain("1 local change has");});
+  it("warns when local sync status cannot be checked",()=>expect(exitWarningCopy(null).title).toBe("Sync status could not be verified"));
+});
 
 describe("cloud order details",()=>{
   it("exposes the selected item name, quantity and per-item price",()=>expect(normalizeCloudOrderLine({id:"line-1",item_id:"pani-puri",item_snapshot:JSON.stringify({name:"Pani Puri",portion:"8 pcs",basePrice:50}),bundle_selection:"[]",quantity:2,unit_total:60,line_total:120})).toMatchObject({name:"Pani Puri",portion:"8 pcs",quantity:2,unit_price:60,line_total:120}));

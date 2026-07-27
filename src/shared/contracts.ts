@@ -36,6 +36,7 @@ export type Dashboard = { revenue: number; expenses: number; profit: number; ord
 export type SyncPreview = { inserts: number; updates: number; conflicts: number; dirty: number; entities: { type: string; id: string; action: string }[] };
 export type PushPreview = SyncPreview & { pushableDirty: number; excludedDirty: number; sections: PushSectionCounts };
 export type SyncStatus = { online: boolean; dirty: number; conflicts: number; lastPull: string | null; lastPush: string | null; runs: any[]; connection: DatabaseConnectionInfo };
+export type SyncAttentionStatus = { conflicts: number; pushableDirty: number; requiresAttention: boolean };
 export type MenuPdfExportResult = { canceled: boolean; path: string | null; pageCount: number; warning: string | null };
 export type MenuImageExportResult = { canceled: boolean; paths: string[]; imageCount: number; warning: string | null };
 export type MenuType = "master" | "one-day";
@@ -54,7 +55,7 @@ export type AdminApi = {
   menu: { catalog(): Promise<{ categories: CatalogCategory[]; items: CatalogItem[] }>; history(): Promise<any[]>; getCurrent(): Promise<Publication | null>; publish(input: Publication): Promise<void>; exportPdf(): Promise<MenuPdfExportResult>; exportPhotoPdf(): Promise<MenuPdfExportResult>; exportImages(): Promise<MenuImageExportResult>; previewImages(): Promise<MenuImageExportResult>; shareWhatsApp(): Promise<void> };
   images: { preview(index: number): Promise<string>; open(index: number): Promise<void>; showInFolder(index: number): Promise<void> };
   cloudOrders: { list(query?: string): Promise<any[]>; detail(id: string): Promise<any>; updateStatus(id: string, status: z.infer<typeof cloudOrderStatusSchema>): Promise<void> };
-  sync: { status(): Promise<SyncStatus>; previewPull(): Promise<SyncPreview>; pull(): Promise<SyncPreview>; previewPush(): Promise<PushPreview>; push(): Promise<PushPreview>; conflicts(): Promise<any[]>; resolve(id: string, resolution: "local" | "neon"): Promise<void>; history(): Promise<any[]>; onStartupPullComplete(callback: () => void): () => void; onStartupPullSettled(callback: () => void): () => void };
+  sync: { status(): Promise<SyncStatus>; attention(): Promise<SyncAttentionStatus>; previewPull(): Promise<SyncPreview>; pull(): Promise<SyncPreview>; previewPush(): Promise<PushPreview>; push(): Promise<PushPreview>; conflicts(): Promise<any[]>; resolve(id: string, resolution: "local" | "neon"): Promise<void>; history(): Promise<any[]>; onStartupPullComplete(callback: () => void): () => void; onStartupPullSettled(callback: () => void): () => void; onNavigateToSync(callback: () => void): () => void };
   menuPublishing: { status(): Promise<MenuImagePublicationStatus>; publish(): Promise<MenuImagePublishResult> };
   reports: { exportCsv(kind: "orders" | "expenses" | "summary", range: DateRange): Promise<string | null> };
   inbox: { list(): Promise<any[]>; sync(): Promise<{ imported: number; unmatched: number }>; createOrder(importId: string): Promise<string> };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { CatalogCategory, CatalogImageSaveSelection, CatalogItem, Dashboard, DateRange, MenuImagePublicationStatus, Publication, PushPreview, RuntimeConfig, SyncPreview, SyncStatus } from "../shared/contracts";
+import type { CatalogCategory, CatalogImageSaveSelection, CatalogItem, Dashboard, DateRange, MenuImagePublicationStatus, Publication, PushPreview, RuntimeConfig, SyncAttentionStatus, SyncPreview, SyncStatus } from "../shared/contracts";
 import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../shared/catalog";
 import { CatalogEditorModal } from "./CatalogEditorModal";
 import { CategoryManagerModal } from "./CategoryManagerModal";
@@ -33,6 +33,7 @@ function App() {
   const [imagePreviewCount, setImagePreviewCount] = useState(0);
   useEffect(() => window.admin.sync.onStartupPullComplete(() => setDataVersion((value) => value + 1)), []);
   useEffect(() => {const started=Date.now();const finish=()=>setTimeout(()=>setStartupLoading(false),Math.max(0,700-(Date.now()-started)));const unsubscribe=window.admin.sync.onStartupPullSettled(finish);const safety=setTimeout(()=>setStartupLoading(false),8000);return()=>{unsubscribe();clearTimeout(safety);};}, []);
+  useEffect(() => window.admin.sync.onNavigateToSync(() => setPage("sync")), []);
   const title = pageTitles[page];
   return <>{startupLoading&&<StartupLoader/>}<div className="app-shell">
     <aside><div className="brand"><b>G</b><div><strong>Gruhswad</strong><span>Kitchen admin</span></div></div>
@@ -43,7 +44,7 @@ function App() {
     <main><header><div><small>HOME KITCHEN OPERATIONS</small><h1>{title}</h1></div>{!(["menu", "settings", "inbox", "catalog", "operations", "orders", "sync"] as Page[]).includes(page) && <DateFilter range={range} setRange={setRange} />}</header>
       {notice && <div className="notice" onClick={() => setNotice("")}>{notice}</div>}
       <React.Fragment key={`${page}-${dataVersion}`}>
-        {page === "dashboard" && <DashboardPage range={range} />}
+        {page === "dashboard" && <DashboardPage range={range} openSync={()=>setPage("sync")} />}
         {page === "orders" && <CloudOrdersPage notify={setNotice} />}
         {page === "catalog" && <CatalogPage notify={setNotice} previewImages={setImagePreviewCount} />}
         {page === "expenses" && <ExpensesPage range={range} notify={setNotice} />}
@@ -72,11 +73,12 @@ function DateFilter({ range, setRange }: { range: DateRange; setRange: (value: D
   return <div className="date-filter"><label>From<input type="date" value={range.from} onChange={(event) => setRange({ ...range, from: event.target.value })} /></label><label>To<input type="date" value={range.to} onChange={(event) => setRange({ ...range, to: event.target.value })} /></label></div>;
 }
 
-function DashboardPage({ range }: { range: DateRange }) {
+function DashboardPage({ range,openSync }: { range: DateRange;openSync:()=>void }) {
   const [data, setData] = useState<Dashboard | null>(null);
-  useEffect(() => { window.admin.dashboard(range).then(setData); }, [range]);
+  const [attention,setAttention]=useState<SyncAttentionStatus|null>(null);
+  useEffect(() => { window.admin.dashboard(range).then(setData);window.admin.sync.attention().then(setAttention).catch(()=>setAttention(null)); }, [range]);
   if (!data) return <Empty text="Loading dashboard..." />;
-  return <><section className="metric-grid"><Metric label="Completed revenue" value={money(data.revenue)} tone="green" /><Metric label="Expenses" value={money(data.expenses)} tone="red" /><Metric label="Profit / loss" value={money(data.profit)} tone={data.profit >= 0 ? "gold" : "red"} /><Metric label="Orders" value={String(data.orderCount)} tone="brown" /><Metric label="Open order value" value={money(data.outstanding)} tone="red" /><Metric label="Average order" value={money(data.averageOrder)} tone="green" /></section>
+  return <>{attention&&attention.conflicts>0&&<section className="dashboard-conflict-alert" role="alert"><div><strong>Cloud synchronization needs attention</strong><p>{attention.conflicts} unresolved sync conflict{attention.conflicts===1?" is":"s are"} blocking a safe cloud update. Review and resolve {attention.conflicts===1?"it":"them"} before pushing to Neon.</p></div><button className="primary" onClick={openSync}>Review conflicts in Sync Centre</button></section>}<section className="metric-grid"><Metric label="Completed revenue" value={money(data.revenue)} tone="green" /><Metric label="Expenses" value={money(data.expenses)} tone="red" /><Metric label="Profit / loss" value={money(data.profit)} tone={data.profit >= 0 ? "gold" : "red"} /><Metric label="Orders" value={String(data.orderCount)} tone="brown" /><Metric label="Open order value" value={money(data.outstanding)} tone="red" /><Metric label="Average order" value={money(data.averageOrder)} tone="green" /></section>
     <section className="split"><Panel title="Recent orders"><p className="muted">Orders placed during the selected date range, including orders with a later pickup date.</p><DataTable rows={data.recentOrders} columns={[["customer_name", "Customer"], ["created_at", "Placed at"], ["service_date", "Pickup date"], ["status", "Status"], ["total", "Total"]]} moneyKeys={["total"]} /></Panel>
       <Panel title="Expenses by category">{data.expenseByCategory.length ? <div className="bars">{data.expenseByCategory.map((row) => <div key={row.category}><span>{row.category}</span><b style={{ width: `${Math.max(8, row.total / Math.max(...data.expenseByCategory.map((item) => item.total)) * 100)}%` }} /><strong>{money(row.total)}</strong></div>)}</div> : <Empty text="No expenses in this period." />}</Panel>
     </section></>;
