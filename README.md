@@ -8,6 +8,8 @@ Independent Gruhswad kitchen operations app. Neon is the primary source for web 
 2. Run `pnpm install`.
 3. Run `pnpm dev`.
 4. Enter the webhook URL, inbox token and rotated least-privilege Neon sync URL under **Settings**. Secrets are encrypted with Electron `safeStorage`.
+5. To publish generated menu images, import a least-privilege Google Cloud service-account JSON under **Settings**. The credential is encrypted with `safeStorage`; the Sync Centre publishes the latest verified master and one-day exports to the configured bucket (default `fb-image-store`) under `menus/`.
+6. Full catalog item edits can choose a packaged food image or browse for JPEG, PNG, or WebP content. Saved images upload to `menu-items/{item-id}.{ext}`, are cached locally for desktop/PDF use, and store only `{item-id}.{ext}` in `image_asset`. Public web consumers resolve that filename as `https://storage.googleapis.com/fb-image-store/menu-items/{image_asset}`.
 
 The SQLite database is created in Electron's per-user application-data directory. The bundled master-menu snapshot is used only to seed an empty database; subsequent reads come from SQLite.
 

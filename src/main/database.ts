@@ -41,7 +41,8 @@ function seedCatalog() {
 }
 
 export function getCatalog() {
-  const categories = sqlite.prepare("SELECT id,name,sort_order AS 'order',active,updated_at AS updatedAt FROM menu_categories ORDER BY sort_order").all();
+  const categories = (sqlite.prepare("SELECT id,name,sort_order AS 'order',active,updated_at AS updatedAt FROM menu_categories ORDER BY sort_order").all() as any[])
+    .map((category) => ({ ...category, active: Boolean(category.active) }));
   const groups = sqlite.prepare("SELECT * FROM bundle_option_groups ORDER BY display_order").all() as any[];
   const choices = sqlite.prepare("SELECT c.*,i.name FROM bundle_option_choices c LEFT JOIN menu_items i ON i.id=c.item_id ORDER BY c.display_order").all() as any[];
   const items = (sqlite.prepare("SELECT id,category_id AS categoryId,item_type AS type,name,description,portion,price,image,available,is_new AS isNew,tags,display_order AS 'order',archived_at AS archivedAt,web_compatible AS webCompatible,updated_at AS updatedAt FROM menu_items ORDER BY display_order,name").all() as any[]).map((item) => ({ ...item, available: Boolean(item.available), isNew: Boolean(item.isNew), archived: Boolean(item.archivedAt), webCompatible: Boolean(item.webCompatible), tags: JSON.parse(item.tags || "[]"), bundleGroups: groups.filter((group) => group.item_id === item.id).map((group) => ({ id: group.id, name: group.name, minChoices: group.min_choices, maxChoices: group.max_choices, order: group.display_order, choices: choices.filter((choice) => choice.group_id === group.id).map((choice) => ({ id: choice.id, itemId: choice.item_id, name: choice.name || "", upgradePrice: choice.upgrade_price, available: Boolean(choice.available), order: choice.display_order })) })) }));

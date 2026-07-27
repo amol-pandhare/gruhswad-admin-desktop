@@ -16,6 +16,7 @@
     "dist": "pnpm icons:win && pnpm build && electron-builder"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@neondatabase/serverless": "^1.1.0",
     "better-sqlite3": "^12.2.0",
     "drizzle-orm": "^0.44.5",
