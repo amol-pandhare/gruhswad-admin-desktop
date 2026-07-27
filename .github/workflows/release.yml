@@ -68,7 +68,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: 0.2.0
+          name: ${{ github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: release/*
