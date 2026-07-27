@@ -1,47 +1,200 @@
 import { dialog } from "electron";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CatalogCategory, CatalogItem, MenuPdfExportResult, Publication, RuntimeConfig } from "../shared/contracts";
+import type {
+  CatalogCategory,
+  CatalogItem,
+  MenuPdfExportResult,
+  Publication,
+  RuntimeConfig,
+} from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
-import { getCatalog, getCurrentPublication, getRuntimeConfig } from "./database";
+import {
+  getCatalog,
+  getCurrentPublication,
+  getRuntimeConfig,
+} from "./database";
 import { renderHtmlPdfToPath } from "./pdf-renderer";
+import {
+  ensureCatalogImagesCached,
+  resolveCatalogImagePath,
+} from "./catalog-images";
 
 type PhotoGroup = { category: CatalogCategory; items: CatalogItem[] };
-export type PhotoMenuPdfInput = { publication: Publication; categories: CatalogCategory[]; items: CatalogItem[]; config: RuntimeConfig; logoUrl?: string; resolveImage: (image?: string | null) => string };
-export type PhotoMenuPdfDocument = { html: string; omittedItemCount: number; pageCount: number };
+export type PhotoMenuPdfInput = {
+  publication: Publication;
+  categories: CatalogCategory[];
+  items: CatalogItem[];
+  config: RuntimeConfig;
+  logoUrl?: string;
+  resolveImage: (image?: string | null) => string;
+};
+export type PhotoMenuPdfDocument = {
+  html: string;
+  omittedItemCount: number;
+  pageCount: number;
+};
 
-const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
-const money = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(2);
-const categoryPhotoFallbacks:Record<string,string>={chaat:"1000128453.jpg",starters:"1000128873.jpg",sabudana:"1000128471.jpg",breads:"1000128477.jpg","paneer-curries":"1000128474.jpg","veg-curries":"1000128483.jpg","dal-rice":"1000128480.jpg","khichdi-desserts":"1000128465.jpg",combos:"1000128468.jpg",thalis:"1000128873.jpg"};
-function serviceDate(value: string) { const [year,month,day]=value.split("-").map(Number);return new Intl.DateTimeFormat("en-IN",{day:"numeric",month:"long",year:"numeric",timeZone:"Asia/Kolkata"}).format(new Date(Date.UTC(year,month-1,day))); }
+const escapeHtml = (value: unknown) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ]!,
+  );
+const money = (value: number) =>
+  Number.isInteger(value) ? String(value) : value.toFixed(2);
+const categoryPhotoFallbacks: Record<string, string> = {
+  chaat: "1000128453.jpg",
+  starters: "1000128873.jpg",
+  sabudana: "1000128471.jpg",
+  breads: "1000128477.jpg",
+  "paneer-curries": "1000128474.jpg",
+  "veg-curries": "1000128483.jpg",
+  "dal-rice": "1000128480.jpg",
+  "khichdi-desserts": "1000128465.jpg",
+  combos: "1000128468.jpg",
+  thalis: "1000128873.jpg",
+};
+function serviceDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
 
 function chunkGroups(groups: PhotoGroup[]) {
-  const cards=groups.flatMap((group)=>Array.from({length:Math.ceil(group.items.length/4)},(_,index)=>({...group,items:group.items.slice(index*4,index*4+4)})));
-  const pages:PhotoGroup[][]=[];for(let index=0;index<cards.length;index+=5)pages.push(cards.slice(index,index+5));return pages.length?pages:[[]];
+  const cards = groups.flatMap((group) =>
+    Array.from({ length: Math.ceil(group.items.length / 4) }, (_, index) => ({
+      ...group,
+      items: group.items.slice(index * 4, index * 4 + 4),
+    })),
+  );
+  const pages: PhotoGroup[][] = [];
+  for (let index = 0; index < cards.length; index += 5)
+    pages.push(cards.slice(index, index + 5));
+  return pages.length ? pages : [[]];
 }
 
-function groupCard(group: PhotoGroup, resolveImage: PhotoMenuPdfInput["resolveImage"]) {
-  const image=group.items.filter((item)=>item.image&&item.image!=="food-placeholder.jpeg").map((item)=>resolveImage(item.image)).find(Boolean)||resolveImage(categoryPhotoFallbacks[group.category.id])||resolveImage();
-  return `<article class="photo-category"><h2>${escapeHtml(group.category.name)}</h2><ul>${group.items.map((item)=>`<li><span>${escapeHtml(item.name)}${item.portion?` <small>${escapeHtml(item.portion)}</small>`:""}</span><b>&#8377;${money(item.price)}</b></li>`).join("")}</ul><img src="${escapeHtml(image)}" alt=""/></article>`;
+function groupCard(
+  group: PhotoGroup,
+  resolveImage: PhotoMenuPdfInput["resolveImage"],
+) {
+  const image =
+    group.items
+      .filter((item) => item.image && item.image !== "food-placeholder.jpeg")
+      .map((item) => resolveImage(item.image))
+      .find(Boolean) ||
+    resolveImage(categoryPhotoFallbacks[group.category.id]) ||
+    resolveImage();
+  return `<article class="photo-category"><h2>${escapeHtml(group.category.name)}</h2><ul>${group.items.map((item) => `<li><span>${escapeHtml(item.name)}${item.portion ? ` <small>${escapeHtml(item.portion)}</small>` : ""}</span><b>&#8377;${money(item.price)}</b></li>`).join("")}</ul><img src="${escapeHtml(image)}" alt=""/></article>`;
 }
 
-export function buildPhotoMenuPdfDocument(input: PhotoMenuPdfInput): PhotoMenuPdfDocument {
-  const itemMap=new Map(input.items.map((item)=>[item.id,item]));
-  const printable=input.publication.itemIds.map((id)=>itemMap.get(id)).filter((item):item is CatalogItem=>Boolean(item&&isPublishableItem(item,input.categories)));
-  const omittedItemCount=input.publication.itemIds.length-printable.length;if(!printable.length)throw new Error("The saved one-day menu has no printable items.");
-  const publicationOrder=new Map(input.publication.itemIds.map((id,index)=>[id,index]));
-  const featured=input.publication.featuredItemId?printable.find((item)=>item.id===input.publication.featuredItemId)??null:null;
-  const groups=input.categories.filter((category)=>category.active).sort((a,b)=>a.order-b.order).map((category)=>({category,items:printable.filter((item)=>item.categoryId===category.id&&item.id!==featured?.id).sort((a,b)=>(publicationOrder.get(a.id)??0)-(publicationOrder.get(b.id)??0))})).filter((group)=>group.items.length);
-  const pages=chunkGroups(groups);
-  const logo=input.logoUrl?`<img class="photo-logo" src="${escapeHtml(input.logoUrl)}" alt="${escapeHtml(input.config.site.brandName)}"/>`:`<div class="photo-wordmark">${escapeHtml(input.config.site.brandName)}</div>`;
-  const pageHtml=pages.map((page,index)=>{const first=index===0;const header=first?`<header class="photo-hero">${logo}<div class="photo-title"><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div><div class="photo-ribbon"><strong>PRE-ORDERS<br/>ONLY</strong><span>${escapeHtml(input.publication.orderCutoff)}</span></div></header>`:`<header class="photo-continuation">${logo}<div><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div></header>`;const special=first&&featured?`<section class="photo-special"><div class="special-label">&#9733; TODAY'S SPECIAL ITEM &#9733;</div><img src="${escapeHtml(input.resolveImage(featured.image))}" alt=""/><div><h1>${escapeHtml(featured.name)}</h1><strong>&#8377;${money(featured.price)}</strong><p>${escapeHtml(featured.description||featured.portion||"Freshly prepared with care.")}</p></div></section>`:"";const footer=first?`<footer class="photo-values"><span>&#9829; Homemade with Love</span><i>&bull;</i><span>Fresh Ingredients</span><i>&bull;</i><span>Hygienic Preparation</span><i>&bull;</i><span>Made to Order</span></footer><div class="care">Good Food. Made with Care.</div>`:`<footer class="photo-page-footer"><b>WhatsApp ${escapeHtml(input.config.site.mobile)}</b><span>${escapeHtml(input.publication.orderCutoff)}</span></footer>`;return `<section class="photo-page ${first?"first":"continuation"}">${header}${special}<main class="photo-grid count-${page.length}">${page.map((group)=>groupCard(group,input.resolveImage)).join("")}</main>${footer}<small class="photo-page-number">${index+1} / ${pages.length}</small></section>`;}).join("");
-  const html=`<!doctype html><html><head><meta charset="UTF-8"><style>
+export function buildPhotoMenuPdfDocument(
+  input: PhotoMenuPdfInput,
+): PhotoMenuPdfDocument {
+  const itemMap = new Map(input.items.map((item) => [item.id, item]));
+  const printable = input.publication.itemIds
+    .map((id) => itemMap.get(id))
+    .filter((item): item is CatalogItem =>
+      Boolean(item && isPublishableItem(item, input.categories)),
+    );
+  const omittedItemCount = input.publication.itemIds.length - printable.length;
+  if (!printable.length)
+    throw new Error("The saved one-day menu has no printable items.");
+  const publicationOrder = new Map(
+    input.publication.itemIds.map((id, index) => [id, index]),
+  );
+  const featured = input.publication.featuredItemId
+    ? (printable.find((item) => item.id === input.publication.featuredItemId) ??
+      null)
+    : null;
+  const groups = input.categories
+    .filter((category) => category.active)
+    .sort((a, b) => a.order - b.order)
+    .map((category) => ({
+      category,
+      items: printable
+        .filter(
+          (item) => item.categoryId === category.id && item.id !== featured?.id,
+        )
+        .sort(
+          (a, b) =>
+            (publicationOrder.get(a.id) ?? 0) -
+            (publicationOrder.get(b.id) ?? 0),
+        ),
+    }))
+    .filter((group) => group.items.length);
+  const pages = chunkGroups(groups);
+  const logo = input.logoUrl
+    ? `<img class="photo-logo" src="${escapeHtml(input.logoUrl)}" alt="${escapeHtml(input.config.site.brandName)}"/>`
+    : `<div class="photo-wordmark">${escapeHtml(input.config.site.brandName)}</div>`;
+  const pageHtml = pages
+    .map((page, index) => {
+      const first = index === 0;
+      const header = first
+        ? `<header class="photo-hero">${logo}<div class="photo-title"><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div><div class="photo-ribbon"><strong>PRE-ORDERS<br/>ONLY</strong><span>${escapeHtml(input.publication.orderCutoff)}</span></div></header>`
+        : `<header class="photo-continuation">${logo}<div><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div></header>`;
+      const special =
+        first && featured
+          ? `<section class="photo-special"><div class="special-label">&#9733; TODAY'S SPECIAL ITEM &#9733;</div><img src="${escapeHtml(input.resolveImage(featured.image))}" alt=""/><div><h1>${escapeHtml(featured.name)}</h1><strong>&#8377;${money(featured.price)}</strong><p>${escapeHtml(featured.description || featured.portion || "Freshly prepared with care.")}</p></div></section>`
+          : "";
+      const footer = first
+        ? `<footer class="photo-values"><span>&#9829; Homemade with Love</span><i>&bull;</i><span>Fresh Ingredients</span><i>&bull;</i><span>Hygienic Preparation</span><i>&bull;</i><span>Made to Order</span></footer><div class="care">Good Food. Made with Care.</div>`
+        : `<footer class="photo-page-footer"><b>WhatsApp ${escapeHtml(input.config.site.mobile)}</b><span>${escapeHtml(input.publication.orderCutoff)}</span></footer>`;
+      return `<section class="photo-page ${first ? "first" : "continuation"}">${header}${special}<main class="photo-grid count-${page.length}">${page.map((group) => groupCard(group, input.resolveImage)).join("")}</main>${footer}<small class="photo-page-number">${index + 1} / ${pages.length}</small></section>`;
+    })
+    .join("");
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
 @page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#ddd;color:#25120c;font-family:Arial,sans-serif}.photo-page{position:relative;width:210mm;height:297mm;overflow:hidden;padding:6mm 10mm 8mm;page-break-after:always;background:#fff8ec;background-image:radial-gradient(#aa71330d .3mm,transparent .4mm);background-size:3mm 3mm}.photo-page:last-child{page-break-after:auto}.photo-page:before,.photo-page:after{content:'';position:absolute;pointer-events:none}.photo-page:before{inset:3mm;border:.35mm solid #d8a254;border-radius:4mm}.photo-page:after{inset:5mm;border:.15mm solid #e7c592;border-radius:3mm}.photo-hero{height:71mm;display:grid;grid-template-columns:68mm 1fr 37mm;align-items:center;gap:3mm}.photo-logo{width:100%;height:66mm;object-fit:cover;object-position:center 34%;mix-blend-mode:multiply}.photo-wordmark{font:italic 23pt Georgia;color:#4b160e}.photo-title{display:grid;justify-items:center;text-align:center}.photo-title b{font:26pt Georgia;color:#30130d;text-transform:uppercase}.photo-title span{margin-top:4mm;color:#9d2019;font:italic 12pt Georgia}.photo-ribbon{align-self:start;display:grid;min-height:66mm;place-content:center;gap:6mm;padding:5mm 3mm 12mm;text-align:center;background:#541006;color:#fff;clip-path:polygon(0 0,100% 0,100% 86%,50% 100%,0 86%);box-shadow:inset 0 0 0 .4mm #d69c22}.photo-ribbon strong{font-size:10pt;line-height:1.5}.photo-ribbon span{color:#ffcf43;font-size:8pt;line-height:1.45}.photo-special{position:relative;display:grid;grid-template-columns:1.12fr .88fr;min-height:64mm;margin:2mm 4mm 5mm;overflow:visible;border:.3mm solid #dda758;border-radius:5mm;background:#fffaf1}.special-label{position:absolute;z-index:2;top:-6mm;left:50%;transform:translateX(-50%);padding:2mm 8mm;border-radius:4mm;background:#123c28;color:#f0b73e;font:700 9pt Georgia;white-space:nowrap}.photo-special>img{width:100%;height:62mm;border-radius:4mm 0 0 4mm;object-fit:cover}.photo-special>div:last-child{display:grid;place-content:center;padding:6mm;text-align:center}.photo-special h1{margin:0;color:#44180f;font:italic 20pt Georgia}.photo-special strong{margin:2mm 0;color:#9d2019;font:700 13pt Georgia}.photo-special p{margin:1mm 0;font-size:8.5pt;line-height:1.45}.photo-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4mm;padding:0 1mm}.photo-category{grid-column:span 2;display:grid;grid-template-rows:auto auto 1fr;min-height:59mm;margin:0;padding:3mm;overflow:hidden;border:.25mm solid #e4bd82;border-radius:4mm;background:#fffaf3}.photo-category h2{margin:0;padding-bottom:2mm;border-bottom:.25mm solid #d6a15b;color:#6f211a;font:700 10.5pt Georgia;text-transform:uppercase}.photo-category ul{display:grid;gap:1mm;margin:2mm 0;padding:0;list-style:none;font-size:7.3pt}.photo-category li{display:flex;justify-content:space-between;gap:2mm}.photo-category li:before{content:'>';color:#8f1e19}.photo-category li span{flex:1}.photo-category li small{font-size:6pt}.photo-category li b{white-space:nowrap}.photo-category img{align-self:end;width:100%;height:31mm;border-radius:3mm;object-fit:cover}.photo-grid.count-4 .photo-category:nth-child(4),.photo-grid.count-5 .photo-category:nth-child(n+4){grid-column:span 3}.photo-grid.count-1 .photo-category{grid-column:2/span 4}.photo-grid.count-2 .photo-category{grid-column:span 3}.photo-values{position:absolute;left:17mm;right:17mm;bottom:15mm;display:flex;align-items:center;justify-content:space-around;padding:3mm 5mm;border-radius:6mm;background:#123c28;color:#fff;font:italic 8pt Georgia}.photo-values i{color:#e7a82d}.care{position:absolute;left:0;right:0;bottom:6mm;text-align:center;font:13pt Georgia}.photo-continuation{height:35mm;display:grid;grid-template-columns:62mm 1fr;align-items:center;border-bottom:.4mm double #d6a15b}.photo-continuation .photo-logo{height:32mm}.photo-continuation>div{display:grid;text-align:right}.photo-continuation b{color:#6f211a;font:18pt Georgia;text-transform:uppercase}.photo-continuation span{font-size:8pt}.continuation .photo-grid{margin-top:5mm}.continuation .photo-category{min-height:76mm}.continuation .photo-category img{height:44mm}.photo-page-footer{position:absolute;left:10mm;right:10mm;bottom:9mm;display:flex;justify-content:space-between;padding:2.5mm 5mm;background:#123c28;color:#fff;font-size:7pt}.photo-page-number{position:absolute;right:6mm;bottom:4mm;color:#9b744b;font-size:5.5pt}
-</style></head><body>${pageHtml}</body></html>`;return{html,omittedItemCount,pageCount:pages.length};
+</style></head><body>${pageHtml}</body></html>`;
+  return { html, omittedItemCount, pageCount: pages.length };
 }
 
-function assetsDir(){return join(__dirname,"../renderer/catalog");}
-function assetUrl(image?:string|null){for(const name of [image,"food-placeholder.jpeg"]){if(!name)continue;const path=join(assetsDir(),name);if(existsSync(path))return pathToFileURL(path).href;}return "";}
+function assetUrl(image?: string | null) {
+  return pathToFileURL(resolveCatalogImagePath(image)).href;
+}
 
-export async function exportPhotoOneDayMenuPdf():Promise<MenuPdfExportResult>{const publication=getCurrentPublication();if(!publication)throw new Error("Save a one-day menu before exporting its PDF.");const catalog=getCatalog(),config=getRuntimeConfig();const document=buildPhotoMenuPdfDocument({publication,categories:catalog.categories as CatalogCategory[],items:catalog.items,config,logoUrl:assetUrl("gruhswad-menu-logo.png"),resolveImage:assetUrl});const target=await dialog.showSaveDialog({title:"Export Gruhswad one-day menu with photos",defaultPath:`gruhswad-one-day-menu-${publication.date}-with-photos.pdf`,filters:[{name:"PDF",extensions:["pdf"]}]});if(target.canceled||!target.filePath)return{canceled:true,path:null,pageCount:0,warning:null};return renderHtmlPdfToPath({html:document.html,outputPath:target.filePath,tempPrefix:"gruhswad-one-day-photo-menu",warning:(pageCount)=>{const messages=[];if(document.omittedItemCount)messages.push(`${document.omittedItemCount} stale or unavailable item${document.omittedItemCount===1?" was":"s were"} omitted.`);if(pageCount>1)messages.push(`The photo menu required ${pageCount} pages to remain readable.`);return messages.join(" ")||null;}});}
+export async function exportPhotoOneDayMenuPdf(): Promise<MenuPdfExportResult> {
+  const publication = getCurrentPublication();
+  if (!publication)
+    throw new Error("Save a one-day menu before exporting its PDF.");
+  const catalog = getCatalog(),
+    config = getRuntimeConfig();
+  await ensureCatalogImagesCached(catalog.items);
+  const document = buildPhotoMenuPdfDocument({
+    publication,
+    categories: catalog.categories as CatalogCategory[],
+    items: catalog.items,
+    config,
+    logoUrl: assetUrl("gruhswad-menu-logo.png"),
+    resolveImage: assetUrl,
+  });
+  const target = await dialog.showSaveDialog({
+    title: "Export Gruhswad one-day menu with photos",
+    defaultPath: `gruhswad-one-day-menu-${publication.date}-with-photos.pdf`,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (target.canceled || !target.filePath)
+    return { canceled: true, path: null, pageCount: 0, warning: null };
+  return renderHtmlPdfToPath({
+    html: document.html,
+    outputPath: target.filePath,
+    tempPrefix: "gruhswad-one-day-photo-menu",
+    warning: (pageCount) => {
+      const messages = [];
+      if (document.omittedItemCount)
+        messages.push(
+          `${document.omittedItemCount} stale or unavailable item${document.omittedItemCount === 1 ? " was" : "s were"} omitted.`,
+        );
+      if (pageCount > 1)
+        messages.push(
+          `The photo menu required ${pageCount} pages to remain readable.`,
+        );
+      return messages.join(" ") || null;
+    },
+  });
+}

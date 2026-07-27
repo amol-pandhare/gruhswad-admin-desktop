@@ -29,6 +29,15 @@ export function loadStoredSecrets() { return storedSecrets(); }
 export function databaseConnection() { return resolveDatabaseConnection({ processEnv: process.env, fileEnv: envFile(), storedUrl: storedSecrets().neonDatabaseUrl }); }
 export function databaseConnectionInfo():DatabaseConnectionInfo { try { const { environment, source, configured } = databaseConnection(); return { environment, source, configured }; } catch (error) { return { environment: "local", source: "none", configured: false, error: error instanceof Error ? error.message : String(error) }; } }
 export function loadSecrets():Record<string,string> { const stored=storedSecrets();let neonDatabaseUrl="";try{neonDatabaseUrl=databaseConnection().url;}catch{}return { ...stored, neonDatabaseUrl }; }
+export async function importGcsCredentials() {
+  const result = await dialog.showOpenDialog({ title: "Import Google Cloud service-account credentials", filters: [{ name: "JSON credentials", extensions: ["json"] }], properties: ["openFile"] });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true, configured: Boolean(storedSecrets().gcsServiceAccountJson) };
+  let parsed: { project_id?: string; client_email?: string; private_key?: string };
+  try { parsed = JSON.parse(readFileSync(result.filePaths[0], "utf8")); } catch { throw new Error("The selected file is not valid JSON."); }
+  if (!parsed.project_id || !parsed.client_email || !parsed.private_key) throw new Error("Select a Google Cloud service-account JSON file containing project_id, client_email, and private_key.");
+  saveSecrets({ ...storedSecrets(), gcsServiceAccountJson: JSON.stringify(parsed) });
+  return { canceled: false, configured: true };
+}
 
 export async function publishToGruhswad(payload: Publication) { validatePublicationCatalog(payload); savePublication(payload); }
 export async function syncInbox() {

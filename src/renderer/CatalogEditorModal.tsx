@@ -1,17 +1,558 @@
 import React, { useEffect, useRef, useState } from "react";
-import type { CatalogItem } from "../shared/contracts";
+import type {
+  CatalogImageAsset,
+  CatalogImageSaveSelection,
+  CatalogItem,
+} from "../shared/contracts";
 
 const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
-const imageUrl = (image?: string | null) => `./catalog/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
+const imageUrl = (image?: string | null) =>
+  `catalog-image://image/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
 
-export function CatalogEditorModal({ item, categories, items, onClose, onSave, notify }: { item: CatalogItem; categories: any[]; items: CatalogItem[]; onClose(): void; onSave(item: CatalogItem): Promise<void>; notify(message: string): void }) {
-  const [draft, setDraft] = useState(item); const [saving, setSaving] = useState(false); const initial=useRef(JSON.stringify(item));
-  const dishes=items.filter((entry)=>entry.type==="dish"&&!entry.archived&&entry.available&&entry.id!==draft.id);
-  useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key==="Escape")close();};window.addEventListener("keydown",escape);return()=>window.removeEventListener("keydown",escape);},[draft]);
-  function close(){if(JSON.stringify(draft)!==initial.current&&!confirm("Discard your unsaved catalog changes?"))return;onClose();}
-  function updateGroup(id:string, update:(group:CatalogItem["bundleGroups"][number])=>CatalogItem["bundleGroups"][number]){setDraft((current)=>({...current,bundleGroups:current.bundleGroups.map((group)=>group.id===id?update(group):group)}));}
-  function addGroup(){const dish=dishes[0];if(!dish)return notify("Create an active dish before adding meal choices.");setDraft((current)=>({...current,bundleGroups:[...current.bundleGroups,{id:uid("group"),name:"Choose an option",minChoices:1,maxChoices:1,order:current.bundleGroups.length+1,choices:[{id:uid("choice"),itemId:dish.id,name:dish.name,upgradePrice:0,available:true,order:1}]}]}));}
-  function addChoice(groupId:string){const dish=dishes[0];if(!dish)return;updateGroup(groupId,(group)=>({...group,choices:[...group.choices,{id:uid("choice"),itemId:dish.id,name:dish.name,upgradePrice:0,available:true,order:group.choices.length+1}],maxChoices:Math.max(1,group.maxChoices)}));}
-  async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);try{await onSave(draft);}catch(error){notify(error instanceof Error?error.message:"Could not save item.");setSaving(false);}}
-  return <div className="modal-shell" role="dialog" aria-modal="true"><button className="modal-backdrop" aria-label="Close editor" onClick={close}/><section className="catalog-modal"><header><div><small>FULL CATALOG EDITOR</small><h2>{draft.id?"Edit item details":"Create catalog item"}</h2></div><button onClick={close}>Close</button></header><div className="modal-body"><div className="image-preview"><img src={imageUrl(draft.image)} onError={(event)=>{event.currentTarget.src=imageUrl();}}/><span>Image preview</span></div><form className="catalog-form" onSubmit={submit}><div className="form-grid"><label>Website ID<input required disabled={items.some((entry)=>entry.id===draft.id)} value={draft.id} onChange={(event)=>setDraft({...draft,id:event.target.value.toLowerCase().replace(/[^a-z0-9-]+/g,"-")})}/></label><label>Category<select value={draft.categoryId} onChange={(event)=>setDraft({...draft,categoryId:event.target.value})}>{categories.map((category)=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Item type<select value={draft.type} onChange={(event)=>setDraft({...draft,type:event.target.value as CatalogItem["type"],bundleGroups:event.target.value==="dish"?[]:draft.bundleGroups})}><option value="dish">Dish</option><option value="combo">Combo</option><option value="thali">Thali</option></select></label><label>Name<input required value={draft.name} onChange={(event)=>setDraft({...draft,name:event.target.value})}/></label><label>Portion<input value={draft.portion} onChange={(event)=>setDraft({...draft,portion:event.target.value})}/></label><label>Price<input type="number" min="0" value={draft.price} onChange={(event)=>setDraft({...draft,price:Number(event.target.value)})}/></label><label>Image asset<input value={draft.image??""} onChange={(event)=>setDraft({...draft,image:event.target.value||null})}/></label><label>Display order<input type="number" min="0" value={draft.order} onChange={(event)=>setDraft({...draft,order:Number(event.target.value)})}/></label></div><label>Description<textarea rows={3} value={draft.description} onChange={(event)=>setDraft({...draft,description:event.target.value})}/></label><label>Tags<input value={draft.tags.join(", ")} onChange={(event)=>setDraft({...draft,tags:event.target.value.split(",").map((value)=>value.trim()).filter(Boolean)})}/></label><div className="toggle-grid"><label><input type="checkbox" checked={draft.available} onChange={(event)=>setDraft({...draft,available:event.target.checked})}/>Available</label><label><input type="checkbox" checked={draft.isNew} onChange={(event)=>setDraft({...draft,isNew:event.target.checked})}/>Show New badge</label></div>{draft.type!=="dish"&&<section className="bundle-builder"><div className="bundle-heading"><div><h3>Meal choices</h3><p>Add sections such as Choose a curry, then select dishes customers may pick.</p></div><button type="button" onClick={addGroup}>+ Add choice section</button></div>{draft.bundleGroups.length===0&&<p className="muted">No meal choices added yet.</p>}{draft.bundleGroups.map((group,index)=><fieldset className="bundle-group" key={group.id}><legend>Choice section {index+1}</legend><div className="form-grid three"><label>Section name<input value={group.name} onChange={(event)=>updateGroup(group.id,(value)=>({...value,name:event.target.value}))}/></label><label>Choose at least<input type="number" min="0" max={group.maxChoices} value={group.minChoices} onChange={(event)=>updateGroup(group.id,(value)=>({...value,minChoices:Number(event.target.value)}))}/></label><label>Choose up to<input type="number" min={group.minChoices} max={group.choices.length} value={group.maxChoices} onChange={(event)=>updateGroup(group.id,(value)=>({...value,maxChoices:Number(event.target.value)}))}/></label></div><div className="bundle-choices">{group.choices.map((choice)=><div className="bundle-choice" key={choice.id}><label>Dish option<select value={choice.itemId} onChange={(event)=>{const dish=dishes.find((entry)=>entry.id===event.target.value);updateGroup(group.id,(value)=>({...value,choices:value.choices.map((entry)=>entry.id===choice.id?{...entry,itemId:dish?.id??"",name:dish?.name??""}:entry)}));}}>{dishes.map((dish)=><option value={dish.id} key={dish.id}>{dish.name}</option>)}</select></label><label>Extra charge<input type="number" min="0" value={choice.upgradePrice} onChange={(event)=>updateGroup(group.id,(value)=>({...value,choices:value.choices.map((entry)=>entry.id===choice.id?{...entry,upgradePrice:Number(event.target.value)}:entry)}))}/></label><label className="check"><input type="checkbox" checked={choice.available} onChange={(event)=>updateGroup(group.id,(value)=>({...value,choices:value.choices.map((entry)=>entry.id===choice.id?{...entry,available:event.target.checked}:entry)}))}/>Available</label><button type="button" className="danger" onClick={()=>updateGroup(group.id,(value)=>{const choices=value.choices.filter((entry)=>entry.id!==choice.id);return{...value,choices,minChoices:Math.min(value.minChoices,choices.length),maxChoices:Math.min(value.maxChoices,choices.length)};})}>Remove</button></div>)}</div><div className="bundle-actions"><button type="button" onClick={()=>addChoice(group.id)}>+ Add dish option</button><button type="button" className="danger" onClick={()=>setDraft((current)=>({...current,bundleGroups:current.bundleGroups.filter((entry)=>entry.id!==group.id)}))}>Remove section</button></div></fieldset>)}</section>}<footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving?"Saving...":"Save item"}</button></footer></form></div></section></div>;
+export function CatalogEditorModal({
+  item,
+  categories,
+  items,
+  onClose,
+  onSave,
+  notify,
+}: {
+  item: CatalogItem;
+  categories: any[];
+  items: CatalogItem[];
+  onClose(): void;
+  onSave(
+    item: CatalogItem,
+    selection: CatalogImageSaveSelection,
+  ): Promise<void>;
+  notify(message: string): void;
+}) {
+  const [draft, setDraft] = useState(item);
+  const [saving, setSaving] = useState(false);
+  const initial = useRef(JSON.stringify(item));
+  const [assets, setAssets] = useState<CatalogImageAsset[]>([]);
+  const [selection, setSelection] = useState<CatalogImageSaveSelection>({
+    kind: "unchanged",
+  });
+  const [preview, setPreview] = useState(imageUrl(item.image));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const dishes = items.filter(
+    (entry) =>
+      entry.type === "dish" &&
+      !entry.archived &&
+      entry.available &&
+      entry.id !== draft.id,
+  );
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [draft, selection]);
+  useEffect(() => {
+    window.admin.catalog
+      .imageAssets()
+      .then(setAssets)
+      .catch((error) => notify(error.message));
+  }, []);
+  function close() {
+    if (
+      (JSON.stringify(draft) !== initial.current || selection.kind !== "unchanged") &&
+      !confirm("Discard your unsaved catalog changes?")
+    )
+      return;
+    onClose();
+  }
+  function updateGroup(
+    id: string,
+    update: (
+      group: CatalogItem["bundleGroups"][number],
+    ) => CatalogItem["bundleGroups"][number],
+  ) {
+    setDraft((current) => ({
+      ...current,
+      bundleGroups: current.bundleGroups.map((group) =>
+        group.id === id ? update(group) : group,
+      ),
+    }));
+  }
+  function addGroup() {
+    const dish = dishes[0];
+    if (!dish)
+      return notify("Create an active dish before adding meal choices.");
+    setDraft((current) => ({
+      ...current,
+      bundleGroups: [
+        ...current.bundleGroups,
+        {
+          id: uid("group"),
+          name: "Choose an option",
+          minChoices: 1,
+          maxChoices: 1,
+          order: current.bundleGroups.length + 1,
+          choices: [
+            {
+              id: uid("choice"),
+              itemId: dish.id,
+              name: dish.name,
+              upgradePrice: 0,
+              available: true,
+              order: 1,
+            },
+          ],
+        },
+      ],
+    }));
+  }
+  function addChoice(groupId: string) {
+    const dish = dishes[0];
+    if (!dish) return;
+    updateGroup(groupId, (group) => ({
+      ...group,
+      choices: [
+        ...group.choices,
+        {
+          id: uid("choice"),
+          itemId: dish.id,
+          name: dish.name,
+          upgradePrice: 0,
+          available: true,
+          order: group.choices.length + 1,
+        },
+      ],
+      maxChoices: Math.max(1, group.maxChoices),
+    }));
+  }
+  async function browse() {
+    try {
+      const result = await window.admin.catalog.chooseImage();
+      if (result.canceled || !result.token || !result.previewDataUrl) return;
+      setSelection({ kind: "browse", token: result.token });
+      setPreview(result.previewDataUrl);
+      setPickerOpen(false);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Could not select image.",
+      );
+    }
+  }
+  function selectAsset(asset: CatalogImageAsset) {
+    setSelection(
+      asset.filename === "food-placeholder.jpeg"
+        ? { kind: "placeholder" }
+        : { kind: "asset", filename: asset.filename },
+    );
+    setPreview(asset.previewUrl);
+    setPickerOpen(false);
+  }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(draft, selection);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Could not save item.");
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="modal-shell" role="dialog" aria-modal="true">
+      <button
+        className="modal-backdrop"
+        aria-label="Close editor"
+        onClick={close}
+      />
+      <section className="catalog-modal">
+        <header>
+          <div>
+            <small>FULL CATALOG EDITOR</small>
+            <h2>{draft.id ? "Edit item details" : "Create catalog item"}</h2>
+          </div>
+          <button onClick={close}>Close</button>
+        </header>
+        <div className="modal-body">
+          <div className="image-preview">
+            <img
+              src={preview}
+              alt={`${draft.name || "Catalog item"} image preview`}
+              onError={(event) => {
+                event.currentTarget.src = imageUrl();
+              }}
+            />
+            <span>Image preview</span>
+          </div>
+          <form className="catalog-form" onSubmit={submit}>
+            <div className="form-grid">
+              <label>
+                Website ID
+                <input
+                  required
+                  disabled={items.some((entry) => entry.id === draft.id)}
+                  value={draft.id}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      id: event.target.value
+                        .toLowerCase()
+                        .replace(/[^a-z0-9-]+/g, "-"),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Category
+                <select
+                  value={draft.categoryId}
+                  onChange={(event) =>
+                    setDraft({ ...draft, categoryId: event.target.value })
+                  }
+                >
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Item type
+                <select
+                  value={draft.type}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      type: event.target.value as CatalogItem["type"],
+                      bundleGroups:
+                        event.target.value === "dish" ? [] : draft.bundleGroups,
+                    })
+                  }
+                >
+                  <option value="dish">Dish</option>
+                  <option value="combo">Combo</option>
+                  <option value="thali">Thali</option>
+                </select>
+              </label>
+              <label>
+                Name
+                <input
+                  required
+                  value={draft.name}
+                  onChange={(event) =>
+                    setDraft({ ...draft, name: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Portion
+                <input
+                  value={draft.portion}
+                  onChange={(event) =>
+                    setDraft({ ...draft, portion: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Price
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.price}
+                  onChange={(event) =>
+                    setDraft({ ...draft, price: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <div className="catalog-image-picker">
+                <span>Image asset</span>
+                <div className="catalog-image-picker-actions">
+                  <button type="button" onClick={() => setPickerOpen((value) => !value)}>
+                    {selection.kind === "unchanged"
+                      ? draft.image || "Choose image"
+                      : selection.kind === "asset"
+                        ? selection.filename
+                        : selection.kind === "browse"
+                          ? "Selected local image"
+                          : "Placeholder"}
+                  </button>
+                  <button type="button" onClick={browse}>Browse local image</button>
+                </div>
+                {pickerOpen && (
+                  <div className="catalog-image-options">
+                    {assets.map((asset) => (
+                      <button
+                        type="button"
+                        key={asset.filename}
+                        className={(selection.kind === "asset" && selection.filename === asset.filename) || (selection.kind === "placeholder" && asset.filename === "food-placeholder.jpeg") ? "selected" : ""}
+                        onClick={() => selectAsset(asset)}
+                      >
+                        <img src={asset.previewUrl} alt="" />
+                        <small>{asset.filename}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <label>
+                Display order
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.order}
+                  onChange={(event) =>
+                    setDraft({ ...draft, order: Number(event.target.value) })
+                  }
+                />
+              </label>
+            </div>
+            <label>
+              Description
+              <textarea
+                rows={3}
+                value={draft.description}
+                onChange={(event) =>
+                  setDraft({ ...draft, description: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Tags
+              <input
+                value={draft.tags.join(", ")}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    tags: event.target.value
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </label>
+            <div className="toggle-grid">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={draft.available}
+                  onChange={(event) =>
+                    setDraft({ ...draft, available: event.target.checked })
+                  }
+                />
+                Available
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={draft.isNew}
+                  onChange={(event) =>
+                    setDraft({ ...draft, isNew: event.target.checked })
+                  }
+                />
+                Show New badge
+              </label>
+            </div>
+            {draft.type !== "dish" && (
+              <section className="bundle-builder">
+                <div className="bundle-heading">
+                  <div>
+                    <h3>Meal choices</h3>
+                    <p>
+                      Add sections such as Choose a curry, then select dishes
+                      customers may pick.
+                    </p>
+                  </div>
+                  <button type="button" onClick={addGroup}>
+                    + Add choice section
+                  </button>
+                </div>
+                {draft.bundleGroups.length === 0 && (
+                  <p className="muted">No meal choices added yet.</p>
+                )}
+                {draft.bundleGroups.map((group, index) => (
+                  <fieldset className="bundle-group" key={group.id}>
+                    <legend>Choice section {index + 1}</legend>
+                    <div className="form-grid three">
+                      <label>
+                        Section name
+                        <input
+                          value={group.name}
+                          onChange={(event) =>
+                            updateGroup(group.id, (value) => ({
+                              ...value,
+                              name: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Choose at least
+                        <input
+                          type="number"
+                          min="0"
+                          max={group.maxChoices}
+                          value={group.minChoices}
+                          onChange={(event) =>
+                            updateGroup(group.id, (value) => ({
+                              ...value,
+                              minChoices: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Choose up to
+                        <input
+                          type="number"
+                          min={group.minChoices}
+                          max={group.choices.length}
+                          value={group.maxChoices}
+                          onChange={(event) =>
+                            updateGroup(group.id, (value) => ({
+                              ...value,
+                              maxChoices: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="bundle-choices">
+                      {group.choices.map((choice) => (
+                        <div className="bundle-choice" key={choice.id}>
+                          <label>
+                            Dish option
+                            <select
+                              value={choice.itemId}
+                              onChange={(event) => {
+                                const dish = dishes.find(
+                                  (entry) => entry.id === event.target.value,
+                                );
+                                updateGroup(group.id, (value) => ({
+                                  ...value,
+                                  choices: value.choices.map((entry) =>
+                                    entry.id === choice.id
+                                      ? {
+                                          ...entry,
+                                          itemId: dish?.id ?? "",
+                                          name: dish?.name ?? "",
+                                        }
+                                      : entry,
+                                  ),
+                                }));
+                              }}
+                            >
+                              {dishes.map((dish) => (
+                                <option value={dish.id} key={dish.id}>
+                                  {dish.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Extra charge
+                            <input
+                              type="number"
+                              min="0"
+                              value={choice.upgradePrice}
+                              onChange={(event) =>
+                                updateGroup(group.id, (value) => ({
+                                  ...value,
+                                  choices: value.choices.map((entry) =>
+                                    entry.id === choice.id
+                                      ? {
+                                          ...entry,
+                                          upgradePrice: Number(
+                                            event.target.value,
+                                          ),
+                                        }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="check">
+                            <input
+                              type="checkbox"
+                              checked={choice.available}
+                              onChange={(event) =>
+                                updateGroup(group.id, (value) => ({
+                                  ...value,
+                                  choices: value.choices.map((entry) =>
+                                    entry.id === choice.id
+                                      ? {
+                                          ...entry,
+                                          available: event.target.checked,
+                                        }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                            />
+                            Available
+                          </label>
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() =>
+                              updateGroup(group.id, (value) => {
+                                const choices = value.choices.filter(
+                                  (entry) => entry.id !== choice.id,
+                                );
+                                return {
+                                  ...value,
+                                  choices,
+                                  minChoices: Math.min(
+                                    value.minChoices,
+                                    choices.length,
+                                  ),
+                                  maxChoices: Math.min(
+                                    value.maxChoices,
+                                    choices.length,
+                                  ),
+                                };
+                              })
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bundle-actions">
+                      <button type="button" onClick={() => addChoice(group.id)}>
+                        + Add dish option
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            bundleGroups: current.bundleGroups.filter(
+                              (entry) => entry.id !== group.id,
+                            ),
+                          }))
+                        }
+                      >
+                        Remove section
+                      </button>
+                    </div>
+                  </fieldset>
+                ))}
+              </section>
+            )}
+            <footer>
+              <button type="button" onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={saving}>
+                {saving ? "Saving..." : "Save item"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      </section>
+    </div>
+  );
 }

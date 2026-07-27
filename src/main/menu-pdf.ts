@@ -1,12 +1,19 @@
 import { dialog } from "electron";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getCatalog, getRuntimeConfig } from "./database";
 import type { CatalogItem, MenuPdfExportResult } from "../shared/contracts";
 import { renderHtmlPdfToPath } from "./pdf-renderer";
+import {
+  ensureCatalogImagesCached,
+  resolveCatalogImagePath,
+} from "./catalog-images";
 
-type Category = { id: string; name: string; order: number; active?: boolean | number };
+type Category = {
+  id: string;
+  name: string;
+  order: number;
+  active?: boolean | number;
+};
 
 const placeholder = "food-placeholder.jpeg";
 const defaultMobile = "8123415647";
@@ -22,41 +29,64 @@ const categoryFallbacks: Record<string, string> = {
   combos: "1000128468.jpg",
   thalis: "1000128873.jpg",
 };
-const recommendationIds = ["pav-bhaji", "paneer-butter-masala", "dahi-bhalla-vada", "sabudana-khichadi"];
+const recommendationIds = [
+  "pav-bhaji",
+  "paneer-butter-masala",
+  "dahi-bhalla-vada",
+  "sabudana-khichadi",
+];
 
-const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[character]!));
+const escapeHtml = (value: unknown) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character]!,
+  );
 
-function assetsDir() { return join(__dirname, "../renderer/catalog"); }
 function assetUrl(file?: string | null) {
-  const candidate = file && !file.startsWith("http") ? file : placeholder;
-  for (const name of [candidate, placeholder]) {
-    const path = join(assetsDir(), name);
-    if (existsSync(path)) return pathToFileURL(path).href;
-  }
-  return "";
+  return pathToFileURL(resolveCatalogImagePath(file)).href;
 }
 function printableMobile(value?: string | null) {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : defaultMobile;
 }
 function categoryImage(category: Category, items: CatalogItem[]) {
-  const proper = items.find((item) => item.categoryId === category.id && item.image && item.image !== placeholder && !item.image.startsWith("http"));
-  return assetUrl(proper?.image ?? categoryFallbacks[category.id] ?? placeholder);
+  const proper = items.find(
+    (item) =>
+      item.categoryId === category.id &&
+      item.image &&
+      item.image !== placeholder &&
+      !item.image.startsWith("http"),
+  );
+  return assetUrl(
+    proper?.image ?? categoryFallbacks[category.id] ?? placeholder,
+  );
 }
 function recommendations(items: CatalogItem[]) {
   const selected = recommendationIds
     .map((id) => items.find((item) => item.id === id && !item.archived))
     .filter(Boolean) as CatalogItem[];
-  const fallback = items.filter((item) => !item.archived && item.image && item.image !== placeholder && !selected.some((chosen) => chosen.id === item.id));
+  const fallback = items.filter(
+    (item) =>
+      !item.archived &&
+      item.image &&
+      item.image !== placeholder &&
+      !selected.some((chosen) => chosen.id === item.id),
+  );
   return [...selected, ...fallback].slice(0, 4);
 }
 function distribute(categories: Category[], items: CatalogItem[]) {
   const columns: [Category[], Category[], Category[]] = [[], [], []];
   const weights = [0, 0, 0];
   for (const category of categories) {
-    const weight = 6 + items.filter((item) => item.categoryId === category.id).length;
+    const weight =
+      6 + items.filter((item) => item.categoryId === category.id).length;
     const target = weights.indexOf(Math.min(...weights));
     columns[target].push(category);
     weights[target] += weight;
@@ -67,7 +97,8 @@ function partition(categories: Category[], items: CatalogItem[]) {
   const firstPage: Category[] = [];
   let firstWeight = 0;
   for (const category of categories) {
-    const next = 6 + items.filter((item) => item.categoryId === category.id).length;
+    const next =
+      6 + items.filter((item) => item.categoryId === category.id).length;
     if (firstPage.length >= 3 && firstWeight + next > 76) break;
     firstPage.push(category);
     firstWeight += next;
@@ -76,7 +107,8 @@ function partition(categories: Category[], items: CatalogItem[]) {
   let current: Category[] = [];
   let weight = 0;
   for (const category of categories.slice(firstPage.length)) {
-    const next = 6 + items.filter((item) => item.categoryId === category.id).length;
+    const next =
+      6 + items.filter((item) => item.categoryId === category.id).length;
     if (current.length && weight + next > 82) {
       pages.push(current);
       current = [];
@@ -90,7 +122,9 @@ function partition(categories: Category[], items: CatalogItem[]) {
   return pages;
 }
 function categoryCard(category: Category, items: CatalogItem[]) {
-  const rows = items.filter((item) => item.categoryId === category.id).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const rows = items
+    .filter((item) => item.categoryId === category.id)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   return `<article class="category-card">
     <img src="${categoryImage(category, items)}" alt="" />
     <header><h2>${escapeHtml(category.name)}</h2><span>100% VEG</span></header>
@@ -98,17 +132,30 @@ function categoryCard(category: Category, items: CatalogItem[]) {
   </article>`;
 }
 function categoryGrid(categories: Category[], items: CatalogItem[]) {
-  return `<div class="category-columns">${distribute(categories, items).map((column) => `<div>${column.map((category) => categoryCard(category, items)).join("")}</div>`).join("")}</div>`;
+  return `<div class="category-columns">${distribute(categories, items)
+    .map(
+      (column) =>
+        `<div>${column.map((category) => categoryCard(category, items)).join("")}</div>`,
+    )
+    .join("")}</div>`;
 }
 
 export function buildMenuPdfHtml() {
   const catalog = getCatalog();
   const config = getRuntimeConfig();
-  const items = catalog.items.filter((item) => !item.archived && item.available && item.webCompatible).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const items = catalog.items
+    .filter((item) => !item.archived && item.available && item.webCompatible)
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   const categories = (catalog.categories as Category[])
-    .filter((category) => category.active !== false && category.active !== 0 && items.some((item) => item.categoryId === category.id))
+    .filter(
+      (category) =>
+        category.active !== false &&
+        category.active !== 0 &&
+        items.some((item) => item.categoryId === category.id),
+    )
     .sort((a, b) => a.order - b.order);
-  if (!categories.length || !items.length) throw new Error("The catalog has no printable categories or items.");
+  if (!categories.length || !items.length)
+    throw new Error("The catalog has no printable categories or items.");
 
   const pages = partition(categories, items);
   const featured = recommendations(items);
@@ -116,16 +163,22 @@ export function buildMenuPdfHtml() {
   const tiffinPhoto = assetUrl("1000128465.jpg");
   const mobile = printableMobile(config.site?.mobile);
   const brandName = escapeHtml(config.site?.brandName || "Gruhswad");
-  const cutoff = escapeHtml(config.site?.orderCutoff || "Order before 9:00 PM for next-day delivery");
+  const cutoff = escapeHtml(
+    config.site?.orderCutoff || "Order before 9:00 PM for next-day delivery",
+  );
 
-  const pageHtml = pages.map((pageCategories, index) => {
-    const first = index === 0;
-    const last = index === pages.length - 1;
-    const header = `<div class="reference-header" role="img" aria-label="${brandName} menu header" style="background-image:url('${referenceHeader}')"></div>${first ? `<div class="recommend-title"><span class="chef-hat"></span> CHEF'S RECOMMENDATIONS <span class="chef-hat"></span></div>
+  const pageHtml = pages
+    .map((pageCategories, index) => {
+      const first = index === 0;
+      const last = index === pages.length - 1;
+      const header = `<div class="reference-header" role="img" aria-label="${brandName} menu header" style="background-image:url('${referenceHeader}')"></div>${
+        first
+          ? `<div class="recommend-title"><span class="chef-hat"></span> CHEF'S RECOMMENDATIONS <span class="chef-hat"></span></div>
     <div class="recommendations">${featured.map((item) => `<article><img src="${assetUrl(item.image)}" alt=""/><div><strong>${escapeHtml(item.name)}</strong><b>&#8377;${item.price}</b></div></article>`).join("")}</div>`
-      : ""}`;
+          : ""
+      }`;
 
-    const footer = `<footer>
+      const footer = `<footer>
       <div class="service" style="background-image:linear-gradient(90deg,#21150ee8,#21150eb8),url('${tiffinPhoto}')">
         <strong>TIFFIN SERVICE</strong><p>Daily tiffin services<br/>available on pre-order.</p>
         <ul><li>Healthy Food</li><li>Balanced Meals</li><li>Hygienic Preparation</li><li>Timely Delivery</li></ul>
@@ -135,8 +188,9 @@ export function buildMenuPdfHtml() {
       <div class="preorder"><strong>FOR PRE ORDERS</strong><p>${cutoff}</p>${config.publicLocation?.enabled ? `<small>${escapeHtml(config.publicLocation.name)}<br/>${escapeHtml(config.publicLocation.address)}</small>` : ""}</div>
     </footer>`;
 
-    return `<section class="page ${first ? "first" : "continuation"} ${last ? "last" : ""}">${header}${categoryGrid(pageCategories, items)}${footer}<div class="page-number">${index + 1} / ${pages.length}</div></section>`;
-  }).join("");
+      return `<section class="page ${first ? "first" : "continuation"} ${last ? "last" : ""}">${header}${categoryGrid(pageCategories, items)}${footer}<div class="page-number">${index + 1} / ${pages.length}</div></section>`;
+    })
+    .join("");
 
   return `<!doctype html><html><head><meta charset="UTF-8"><style>
     @page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{background:#eee;color:#432719;font-family:Georgia,'Times New Roman',serif}
@@ -149,12 +203,28 @@ export function buildMenuPdfHtml() {
   </style></head><body>${pageHtml}</body></html>`;
 }
 
-export async function renderMenuPdfToPath(outputPath: string): Promise<MenuPdfExportResult> {
-  return renderHtmlPdfToPath({ html: buildMenuPdfHtml(), outputPath, tempPrefix: "gruhswad-menu", warning: (pageCount) => pageCount > 2 ? `The catalog required ${pageCount} pages to remain readable.` : null });
+export async function renderMenuPdfToPath(
+  outputPath: string,
+): Promise<MenuPdfExportResult> {
+  await ensureCatalogImagesCached(getCatalog().items);
+  return renderHtmlPdfToPath({
+    html: buildMenuPdfHtml(),
+    outputPath,
+    tempPrefix: "gruhswad-menu",
+    warning: (pageCount) =>
+      pageCount > 2
+        ? `The catalog required ${pageCount} pages to remain readable.`
+        : null,
+  });
 }
 
 export async function exportMenuPdf(): Promise<MenuPdfExportResult> {
-  const target = await dialog.showSaveDialog({ title: "Export Gruhswad master menu", defaultPath: `gruhswad-master-menu-${new Date().toISOString().slice(0, 10)}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
-  if (target.canceled || !target.filePath) return { canceled: true, path: null, pageCount: 0, warning: null };
+  const target = await dialog.showSaveDialog({
+    title: "Export Gruhswad master menu",
+    defaultPath: `gruhswad-master-menu-${new Date().toISOString().slice(0, 10)}.pdf`,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (target.canceled || !target.filePath)
+    return { canceled: true, path: null, pageCount: 0, warning: null };
   return renderMenuPdfToPath(target.filePath);
 }
