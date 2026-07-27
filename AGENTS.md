@@ -16,6 +16,7 @@
 - `src/shared` owns cross-process contracts and pure business logic. Keep publication, order, expense, payment, date-range, and parser validation here.
 - `src/shared/master-menu.seed.json` is a copied bootstrap snapshot. It seeds an empty SQLite database only; it is not the runtime source of truth.
 - `drizzle` contains append-only SQLite migrations. `src/main/schema.ts` mirrors the current schema for typed queries.
+- Packaged builds must copy `drizzle` to `process.resourcesPath/drizzle` through Electron Builder `extraResources`. Keeping migrations only inside `app.asar` breaks both fresh-install and upgrade startup.
 - `webhook` is a separately deployable Vercel package for Meta verification, signature validation, idempotent Neon inbox storage, authenticated pulls, acknowledgement, and retention cleanup.
 - `tests` contains contract and pure-domain coverage. Add integration tests here as repositories mature.
 
@@ -40,6 +41,9 @@
 - Cash-basis revenue includes received payments minus refunds. Profit is cash revenue minus expenses recorded within the selected period.
 - Structured WhatsApp messages create draft orders. Use Meta message IDs and the `whatsapp_imports` unique constraint to prevent duplicates; unmatched text stays visible for manual handling.
 - Store connection secrets with Electron `safeStorage`. Do not return decrypted secrets to the renderer. Preserve previously stored secrets when a settings field is left blank.
+- Keep GCS credentials and catalog image filesystem paths in the main process. Renderer image selection must use short-lived opaque tokens, and preview/file APIs must remain scoped to allowlisted packaged assets or the latest completed export.
+- Catalog cloud images use `menu-items/{item-id}.{ext}` and stable filename-only `image_asset` values. Never allow renderer-supplied bucket names, object paths, or arbitrary local paths.
+- Menu image publication uses verified persisted export metadata and stable `menus/` object names. Upload pages before manifests, reject modified or stale local exports, and never delete outside the controlled master/one-day prefixes.
 - Before restoring a backup, decrypt it, run SQLite integrity validation, and verify the migration table. Apply a valid staged restore only on restart.
 - Publish only available, web-compatible item IDs. The featured item must belong to the selected set, and duplicate IDs are invalid.
 - Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
@@ -77,10 +81,11 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - Publication or parser changes require contract tests for valid payloads, duplicates, featured-item membership, structured messages, and unmatched messages.
 - Schema changes require new-database, upgrade, backup, and restore verification.
 - Changes to Electron Builder, signing, or updates require checking both Windows and macOS jobs in `.github/workflows/release.yml`.
+- Packaged runtime smoke tests must unset `ELECTRON_RUN_AS_NODE` and use `GRUHSWAD_TEST_USER_DATA` for an isolated profile. Verify database creation and captured stderr, not merely that the process launched.
 
 ## Known setup requirements
 
-- Replace the placeholder GitHub owner in `package.json` before publishing releases.
+- GitHub releases publish to `amol-pandhare/gruhswad-admin-desktop`. Keep space-free Windows and macOS artifact names aligned with `latest.yml` and `latest-mac.yml`.
 - Production publishing needs a dedicated Neon URL entered through Settings.
 - WhatsApp ingestion needs a deployed webhook, Meta Business credentials, and a matching inbox API token.
-- Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
+- Current 0.3.0 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.

@@ -2,6 +2,19 @@
 
 Independent Gruhswad kitchen operations app. Neon is the primary source for web orders and synchronized business data; SQLite keeps an offline desktop cache plus local expenses and reporting data.
 
+Current release: **0.3.0**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
+
+## Current behavior
+
+- **Overview** reports revenue, expenses, profit or loss, order counts, open value, recent orders, and expenses by category. Unresolved conflicts produce a prominent Sync Centre CTA.
+- **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
+- **One-day menu** saves a publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. All exports use the latest locally saved publication.
+- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, and public-location configuration.
+- **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
+- **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
+
+Closing the application with unresolved conflicts or pushable dirty records opens a native warning. **Go to Sync Centre** keeps the app open and navigates there; **Exit Anyway** preserves the pending state and closes the app.
+
 ## Local development
 
 1. Install Node 22 and pnpm 10.
@@ -11,7 +24,11 @@ Independent Gruhswad kitchen operations app. Neon is the primary source for web 
 5. To publish generated menu images, import a least-privilege Google Cloud service-account JSON under **Settings**. The credential is encrypted with `safeStorage`; the Sync Centre publishes the latest verified master and one-day exports to the configured bucket (default `fb-image-store`) under `menus/`.
 6. Full catalog item edits can choose a packaged food image or browse for JPEG, PNG, or WebP content. Saved images upload to `menu-items/{item-id}.{ext}`, are cached locally for desktop/PDF use, and store only `{item-id}.{ext}` in `image_asset`. Public web consumers resolve that filename as `https://storage.googleapis.com/fb-image-store/menu-items/{image_asset}`.
 
+Local image selection is validated in the trusted main process, limited to 10 MB, and represented in the renderer by a short-lived opaque token. Images upload only when the full item save succeeds. Selecting the placeholder removes the previous cloud object; an extension change also cleans up the old object so each item has at most one cloud image.
+
 The SQLite database is created in Electron's per-user application-data directory. The bundled master-menu snapshot is used only to seed an empty database; subsequent reads come from SQLite.
+
+Packaged applications load append-only migrations from `resources/drizzle`. Electron Builder's `extraResources` entry must remain in place or fresh installs and upgrades will fail at startup.
 
 ## Neon permissions
 
@@ -26,6 +43,7 @@ Use separate least-privilege roles. Restrict the desktop sync role to the synchr
 - Overlapping edits become explicit conflicts in **Sync Centre**.
 - Local expenses, payments, manual orders, reports, and WhatsApp imports are never pushed.
 - A one-day menu reaches the website only after an explicit push.
+- Dashboard conflict alerts and the safe-exit warning use a fast local-only attention check and do not depend on Neon connectivity.
 
 Database selection uses `APP_ENV=local|prod`. An encrypted Neon URL saved in Settings takes precedence, followed by `DATABASE_URL_LOCAL` or `DATABASE_URL_PROD`, then the legacy `DATABASE_URL` fallback. Startup synchronization never pushes data and failures remain visible in Sync Centre history.
 
@@ -43,6 +61,31 @@ Backups are encrypted with Electron `safeStorage`, making them intentionally tie
 
 Open **Catalog** and use **Export menu PDF** at the upper-left. The export reads the current SQLite catalog and Operations settings, works offline, and opens the native Save dialog. It creates A4 portrait pages with three category columns, readable item text, category banners, recommendations, contact details, and the service footer. Large catalogs receive extra pages instead of smaller text.
 
+## One-day menu and template image exports
+
+The One-day menu page exports a compact saved-menu PDF and a separate photo-layout PDF. Items that have become unavailable, archived, website-incompatible, or assigned to inactive categories are omitted. The featured panel is optional and is removed when its saved item is no longer printable.
+
+Catalog and One-day menu also have separate preview and export buttons for 1085 x 1536 PNG images. Every page uses the complete packaged `MASTER-002_Template.png` background and renders text-only dynamic menu content in the available center area. Oversized menus create numbered continuation images instead of shrinking below a readable size.
+
+After a saved export, an in-app gallery opens with whole-image fitting, scrolling, zoom below and above 100%, fixed previous/next controls, arrow-key navigation, page indicators, thumbnails, opening in the default viewer, and showing the file in its destination folder. Preview-only generation does not replace the latest saved export record.
+
+## Google Cloud menu publication
+
+The Sync Centre **Publish Menu Images** action requires both a saved master export and a saved one-day export. It verifies each file's timestamp, size, dimensions, and SHA-256 hash before uploading. A newer cloud manifest blocks an older local export, while identical hash sets are treated as already published.
+
+Stable objects are published under `menus/`:
+
+```text
+menus/master-menu.png
+menus/master-menu-02.png
+menus/master-menu.json
+menus/one-day-menu.png
+menus/one-day-menu-02.png
+menus/one-day-menu.json
+```
+
+Pages upload before their manifest. Obsolete continuation pages are deleted only within these controlled prefixes. The desktop application does not change bucket IAM or public-access configuration.
+
 ## Releases
 
 Release builds embed `APP_ENV=prod` as their default environment but never bundle `.env` or a Neon URL. On first launch, open **Settings**, enter the least-privilege production Neon URL, and save it to the operating-system credential vault. An external runtime `APP_ENV` or `.env` can still intentionally override the packaged default.
@@ -54,14 +97,19 @@ $env:APP_ENV="prod"
 pnpm.cmd dist
 ```
 
-Artifacts are written to `release/`, including the NSIS installer, block map and `latest.yml`. Windows SmartScreen may warn because version 0.2.0 is unsigned.
+Artifacts are written to `release/`, including `Gruhswad-Admin-Setup-0.3.0.exe`, its block map, `latest.yml`, and `win-unpacked`. Windows SmartScreen may warn because version 0.3.0 is unsigned.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml` with `APP_ENV=prod`, builds Windows NSIS plus macOS DMG/ZIP artifacts, and publishes the update metadata consumed by `electron-updater`. Unsigned macOS builds trigger Gatekeeper; users must explicitly approve the application. Add `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`, `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` repository secrets to enable signing and notarization in a future release.
+Pushing a `v*` tag runs `.github/workflows/release.yml` with `APP_ENV=prod`, builds Windows NSIS plus macOS DMG/ZIP artifacts, and publishes the update metadata consumed by `electron-updater`. Space-free artifact names must stay aligned with `latest.yml` and `latest-mac.yml`. Unsigned macOS builds trigger Gatekeeper; users must explicitly approve the application. Add `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`, `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` repository secrets to enable signing and notarization in a future release.
+
+The published 0.3.0 release is available at <https://github.com/amol-pandhare/gruhswad-admin-desktop/releases/tag/v0.3.0>.
 
 ## Commands
 
-- `pnpm dev` — Electron development mode
-- `pnpm test` — contract and domain tests
-- `pnpm typecheck` — strict TypeScript checks
-- `pnpm build` — production bundles
-- `pnpm dist` — local installer build
+- `pnpm dev` - Electron development mode
+- `pnpm test` - contract and domain tests
+- `pnpm typecheck` - strict TypeScript checks
+- `pnpm build` - production bundles
+- `pnpm pack` - unpacked application build
+- `pnpm dist` - local installer build
+
+When smoke-testing a packaged app from an automation shell, unset `ELECTRON_RUN_AS_NODE` and set `GRUHSWAD_TEST_USER_DATA` to an isolated profile directory.
