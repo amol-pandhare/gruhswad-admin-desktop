@@ -45,6 +45,7 @@
     "productName": "Gruhswad Admin",
     "directories": { "output": "release" },
     "files": ["out/**/*", "drizzle/**/*", "package.json"],
+    "extraResources": [{ "from": "drizzle", "to": "drizzle" }],
     "asarUnpack": ["node_modules/better-sqlite3/**/*"],
     "win": { "target": ["nsis"], "icon": "build/icon.ico", "artifactName": "Gruhswad-Admin-Setup-${version}.${ext}" },
     "mac": { "target": ["dmg", "zip"], "category": "public.app-category.business", "icon": "build/icon.icns", "artifactName": "Gruhswad-Admin-${version}-${arch}-mac.${ext}" },
