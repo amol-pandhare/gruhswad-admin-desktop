@@ -9,7 +9,7 @@ Current release: **0.3.0**. The application includes Overview, cloud Orders, Cat
 - **Overview** reports revenue, expenses, profit or loss, order counts, open value, recent orders, and expenses by category. Unresolved conflicts produce a prominent Sync Centre CTA.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
 - **One-day menu** saves a publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. All exports use the latest locally saved publication.
-- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, and public-location configuration.
+- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, public-location, and scheduled landing-page announcement configuration.
 - **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
 - **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
 
@@ -37,6 +37,7 @@ Use separate least-privilege roles. Restrict the desktop sync role to the synchr
 ## Offline synchronization
 
 - Orders are refreshed from Neon into SQLite and remain readable offline.
+- WhatsApp notification outcomes are mirrored from Neon for order-detail visibility. The desktop never sends notifications itself; synchronized status changes use Neon's shared transition function and transactional outbox.
 - On launch, the app opens from SQLite immediately and performs one silent Neon pull when a connection is configured.
 - **Pull from Neon** previews and merges remote changes while preserving dirty local records.
 - **Push to Neon** previews and sends only compatible dirty records.
@@ -44,6 +45,7 @@ Use separate least-privilege roles. Restrict the desktop sync role to the synchr
 - Local expenses, payments, manual orders, reports, and WhatsApp imports are never pushed.
 - A one-day menu reaches the website only after an explicit push.
 - Dashboard conflict alerts and the safe-exit warning use a fast local-only attention check and do not depend on Neon connectivity.
+- The landing-page announcement is synchronized as the `announcement` app-setting record. Its enabled switch is authoritative; optional ISO start/end times schedule visibility, and an optional CTA requires both a label and an HTTPS URL.
 
 Database selection uses `APP_ENV=local|prod`. An encrypted Neon URL saved in Settings takes precedence, followed by `DATABASE_URL_LOCAL` or `DATABASE_URL_PROD`, then the legacy `DATABASE_URL` fallback. Startup synchronization never pushes data and failures remain visible in Sync Centre history.
 
