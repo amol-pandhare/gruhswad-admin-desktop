@@ -46,6 +46,7 @@
 - Menu image publication uses verified persisted export metadata and stable `menus/` object names. Upload pages before manifests, reject modified or stale local exports, and never delete outside the controlled master/one-day prefixes.
 - Before restoring a backup, decrypt it, run SQLite integrity validation, and verify the migration table. Apply a valid staged restore only on restart.
 - Publish only available, web-compatible item IDs. The featured item must belong to the selected set, and duplicate IDs are invalid.
+- Keep the landing announcement in the separate `announcement` app-settings key. Match the web contract: enabled visibility, optional 80-character title, required 280-character message when enabled, paired optional HTTPS link label/URL, and optional ISO start/end timestamps with end after start.
 - Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
 
 ## Development workflow
@@ -88,4 +89,5 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - GitHub releases publish to `amol-pandhare/gruhswad-admin-desktop`. Keep space-free Windows and macOS artifact names aligned with `latest.yml` and `latest-mac.yml`.
 - Production publishing needs a dedicated Neon URL entered through Settings.
 - WhatsApp ingestion needs a deployed webhook, Meta Business credentials, and a matching inbox API token.
+- Cloud order status pushes call Neon's `gruhswad_transition_order`; do not restore direct order/event writes or send customer notifications from Electron.
 - Current 0.3.0 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.

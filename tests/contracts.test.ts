@@ -1,5 +1,5 @@
 import { describe,expect,it } from "vitest";
-import { catalogCategorySchema, catalogItemSchema, publicationSchema } from "../src/shared/contracts";
+import { announcementSchema, catalogCategorySchema, catalogItemSchema, publicationSchema } from "../src/shared/contracts";
 import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../src/shared/catalog";
 import { cashSummary } from "../src/shared/reports";
 import { parseStructuredOrder } from "../src/shared/whatsapp";
@@ -26,6 +26,9 @@ describe("Operations SQLite payload normalization",()=>{
   it("uses the seeded mobile when the site payload has no phone",()=>expect(normalizeRuntimeSetting("site",{brandName:"Gruhswad"}).mobile).toBe("8123415647"));
   it("maps legacy Neon phone fields to a ten-digit mobile",()=>expect(normalizeRuntimeSetting("site",{displayPhone:"+91 99887 76655"}).mobile).toBe("9988776655"));
   it("produces a complete valid Operations configuration from missing rows",()=>expect(runtimeConfigFromSettings({}).site.mobile).toBe("8123415647"));
+  it("normalizes missing legacy announcement state to disabled",()=>expect(runtimeConfigFromSettings({}).announcement).toEqual({enabled:false,title:"",message:"",linkLabel:"",linkUrl:"",startsAt:null,endsAt:null}));
+  it("accepts the landing-page announcement contract",()=>expect(announcementSchema.parse({enabled:true,title:"Holiday orders",message:"Pre-orders close early today.",linkLabel:"View menu",linkUrl:"https://gruhswad.example/menu",startsAt:"2026-07-28T12:00:00.000Z",endsAt:"2026-07-29T12:00:00.000Z"}).enabled).toBe(true));
+  it("rejects incomplete links, insecure links and invalid schedules",()=>{const base={enabled:true,title:"Update",message:"Kitchen update",linkLabel:"Learn more",linkUrl:"http://example.com",startsAt:"2026-07-29T12:00:00.000Z",endsAt:"2026-07-28T12:00:00.000Z"};expect(announcementSchema.safeParse(base).success).toBe(false);expect(announcementSchema.safeParse({...base,linkUrl:""}).success).toBe(false);expect(announcementSchema.safeParse({...base,linkLabel:"",linkUrl:"https://example.com",startsAt:null,endsAt:null}).success).toBe(false);});
 });
 
 describe("Neon push allowlist",()=>{
@@ -34,7 +37,7 @@ describe("Neon push allowlist",()=>{
     expect(pushSectionFor("catalog_category","street-food")).toBe("catalog");
     expect(pushSectionFor("catalog_item","pani-puri")).toBe("catalog");
     expect(pushSectionFor("publication","current")).toBe("menu");
-    for(const key of ["site","operations","service_area","ordering_platforms","public_location"])expect(pushSectionFor("app_setting",key)).toBe("operations");
+    for(const key of ["site","operations","announcement","service_area","ordering_platforms","public_location"])expect(pushSectionFor("app_setting",key)).toBe("operations");
   });
   it("excludes finance, desktop settings and unsupported cloud writes",()=>{
     const rows=[{type:"expense",id:"e1"},{type:"payment",id:"p1"},{type:"whatsapp_import",id:"w1"},{type:"credential",id:"neon"},{type:"app_setting",id:"desktop_theme"},{type:"publication",id:"history"},{type:"cloud_order",id:"o1"},{type:"unknown",id:"x"}];
