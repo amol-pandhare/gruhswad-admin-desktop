@@ -4,7 +4,7 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import seed from "../shared/master-menu.seed.json";
-import type { CatalogCategory, CatalogItem, DateRange, ExpenseInput, OrderInput, PaymentInput, Publication, RuntimeConfig } from "../shared/contracts";
+import { publicationSchema, type CatalogCategory, type CatalogItem, type DateRange, type ExpenseInput, type OrderInput, type PaymentInput, type Publication, type RuntimeConfig } from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
 import { normalizeServiceDate, normalizeTimestamp } from "../shared/dates";
 import { normalizeCloudOrderLine } from "../shared/order-detail";
@@ -70,7 +70,7 @@ export function saveExpense(input: ExpenseInput) { const id=input.id??randomUUID
 export function removeExpense(id:string){ sqlite.prepare("DELETE FROM expenses WHERE id=?").run(id); }
 export function savePublication(payload:Publication){ const now=new Date().toISOString();sqlite.transaction(()=>{sqlite.prepare("INSERT INTO menu_publications(id,service_date,payload,published_at) VALUES(?,?,?,?)").run(randomUUID(),payload.date,JSON.stringify(payload),now);sqlite.prepare("INSERT INTO current_publication(publication_key,payload,published_at) VALUES('current',?,?) ON CONFLICT(publication_key) DO UPDATE SET payload=excluded.payload,published_at=excluded.published_at").run(JSON.stringify(payload),now);markDirty("publication","current",payload);})(); }
 export function publicationHistory(){ return sqlite.prepare("SELECT id,service_date,payload,published_at FROM menu_publications ORDER BY published_at DESC LIMIT 50").all(); }
-export function getCurrentPublication(){const row=sqlite.prepare("SELECT payload FROM current_publication WHERE publication_key='current'").get() as {payload:string}|undefined;return row?JSON.parse(row.payload):null;}
+export function getCurrentPublication(){const row=sqlite.prepare("SELECT payload FROM current_publication WHERE publication_key='current'").get() as {payload:string}|undefined;return row?publicationSchema.parse(JSON.parse(row.payload)):null;}
 
 function markDirty(entityType:string,entityId:string,payload:unknown){sqlite.prepare("INSERT INTO sync_state(entity_type,entity_id,dirty,base_payload) VALUES(?,?,1,NULL) ON CONFLICT(entity_type,entity_id) DO UPDATE SET dirty=1").run(entityType,entityId);}
 export function validateCatalogItemReferences(item:CatalogItem){const category=sqlite.prepare("SELECT active FROM menu_categories WHERE id=?").get(item.categoryId) as {active:number}|undefined;if(!category)throw new Error("Select an existing catalog category.");for(const group of item.bundleGroups){for(const choice of group.choices){const dish=sqlite.prepare("SELECT item_type,available,archived_at FROM menu_items WHERE id=?").get(choice.itemId) as {item_type:string;available:number;archived_at:string|null}|undefined;if(!dish||dish.item_type!=="dish"||!dish.available||dish.archived_at)throw new Error(`Bundle choice ${choice.itemId} must reference an available, active dish.`);}}}

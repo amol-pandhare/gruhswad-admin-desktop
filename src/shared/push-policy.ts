@@ -5,7 +5,7 @@ export type PushSectionCounts = Record<PushSectionKey, number>;
 export const pushSectionLabels: Record<PushSectionKey, string> = {
   orders: "Orders",
   catalog: "Catalog",
-  menu: "One-day menu",
+  menu: "Menu publication",
   operations: "Operations",
 };
 

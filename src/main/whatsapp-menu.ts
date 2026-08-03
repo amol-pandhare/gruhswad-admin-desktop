@@ -1,6 +1,7 @@
 import { clipboard, shell } from "electron";
 import type { CatalogCategory, CatalogItem, Publication, RuntimeConfig } from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
+import { tomorrowInIndia, weeklyWindow } from "../shared/dates";
 import { getCatalog, getCurrentPublication, getRuntimeConfig } from "./database";
 
 const money = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -27,8 +28,10 @@ export function buildOneDayMenuWhatsAppMessage(publication: Publication, categor
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
     .map((item) => `- ${item.name} - Rs. ${money(item.price)}`);
 
+  const window=weeklyWindow();
   return [
-    "*Tomorrow's Special Menu*",
+    publication.mode==="weekly"?"*Gruhswad Weekly Menu*":"*Tomorrow's Special Menu*",
+    publication.mode==="weekly"?`${serviceDate(window[0])} - ${serviceDate(window[6])}`:serviceDate(tomorrowInIndia()),
     "",
     "Treat yourself to a delicious homemade meal from GruhSwad!",
     "",
@@ -45,7 +48,7 @@ export function buildOneDayMenuWhatsAppMessage(publication: Publication, categor
 
 export async function shareOneDayMenuOnWhatsApp() {
   const publication = getCurrentPublication();
-  if (!publication) throw new Error("Save a one-day menu before sharing it on WhatsApp.");
+  if (!publication) throw new Error("Save a menu before sharing it on WhatsApp.");
   const catalog = getCatalog(), config = getRuntimeConfig(), mobile = config.site.mobile.replace(/\D/g, "").slice(-10);
   if (!/^\d{10}$/.test(mobile)) throw new Error("Set a valid 10-digit Operations mobile number before sharing.");
   const message = buildOneDayMenuWhatsAppMessage(publication, catalog.categories as CatalogCategory[], catalog.items, config);

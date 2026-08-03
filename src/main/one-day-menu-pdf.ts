@@ -5,11 +5,12 @@ import { pathToFileURL } from "node:url";
 import QRCode from "qrcode";
 import type { CatalogCategory, CatalogItem, MenuPdfExportResult, Publication, RuntimeConfig } from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
+import { tomorrowInIndia, weeklyWindow } from "../shared/dates";
 import { getCatalog, getCurrentPublication, getRuntimeConfig } from "./database";
 import { renderHtmlPdfToPath } from "./pdf-renderer";
 
 type MenuGroup = { category: CatalogCategory; items: CatalogItem[]; continuation?: boolean };
-export type OneDayMenuPdfInput = { publication: Publication; categories: CatalogCategory[]; items: CatalogItem[]; config: RuntimeConfig; qrDataUrl: string; logoUrl?: string };
+export type OneDayMenuPdfInput = { publication: Publication; categories: CatalogCategory[]; items: CatalogItem[]; config: RuntimeConfig; qrDataUrl: string; logoUrl?: string; now?: Date };
 export type OneDayMenuPdfDocument = { html: string; omittedItemCount: number; pageCount: number };
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
@@ -49,7 +50,8 @@ export function buildOneDayMenuPdfDocument(input: OneDayMenuPdfInput): OneDayMen
   const pages = paginate(groups, featured ? 24 : 32);
   const mobile = printableMobile(input.config.site.mobile);
   const title = escapeHtml(input.publication.title);
-  const serviceDate = escapeHtml(formatServiceDate(input.publication.date));
+  const dates=weeklyWindow(input.now);
+  const serviceDate = escapeHtml(input.publication.mode==="weekly"?`${formatServiceDate(dates[0])} - ${formatServiceDate(dates[6])}`:formatServiceDate(tomorrowInIndia(input.now)));
   const cutoff = escapeHtml(input.publication.orderCutoff || input.config.site.orderCutoff);
   const brand = escapeHtml(input.config.site.brandName || "Gruhswad");
   const tagline = escapeHtml(input.config.site.tagline || "Taste of Home");
@@ -77,7 +79,7 @@ export async function exportOneDayMenuPdf(): Promise<MenuPdfExportResult> {
   const catalog = getCatalog(); const config = getRuntimeConfig(); const mobile = printableMobile(config.site.mobile);
   const qrDataUrl = await QRCode.toDataURL(`https://wa.me/91${mobile}`, { width: 240, margin: 1, color: { dark: "#173a27", light: "#fff7e7" } });
   const document = buildOneDayMenuPdfDocument({ publication, categories: catalog.categories as CatalogCategory[], items: catalog.items, config, qrDataUrl, logoUrl: assetUrl("gruhswad-menu-logo.png") });
-  const target = await dialog.showSaveDialog({ title: "Export Gruhswad one-day menu", defaultPath: `gruhswad-one-day-menu-${publication.date}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+  const label=publication.mode==="weekly"?"weekly":"one-day"; const target = await dialog.showSaveDialog({ title: `Export Gruhswad ${label} menu`, defaultPath: `gruhswad-${label}-menu-${tomorrowInIndia()}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
   if (target.canceled || !target.filePath) return { canceled: true, path: null, pageCount: 0, warning: null };
   return renderHtmlPdfToPath({ html: document.html, outputPath: target.filePath, tempPrefix: "gruhswad-one-day-menu", warning: (pageCount) => { const messages=[]; if(document.omittedItemCount)messages.push(`${document.omittedItemCount} stale or unavailable item${document.omittedItemCount===1?" was":"s were"} omitted.`); if(pageCount>1)messages.push(`The menu required ${pageCount} pages to remain readable.`); return messages.join(" ")||null; } });
 }
