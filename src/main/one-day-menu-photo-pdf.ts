@@ -8,6 +8,7 @@ import type {
   RuntimeConfig,
 } from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
+import { tomorrowInIndia, weeklyWindow } from "../shared/dates";
 import {
   getCatalog,
   getCurrentPublication,
@@ -65,6 +66,7 @@ function serviceDate(value: string) {
     timeZone: "Asia/Kolkata",
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
+function publicationDateLabel(publication:Publication){const dates=weeklyWindow();return publication.mode==="weekly"?`${serviceDate(dates[0])} - ${serviceDate(dates[6])}`:serviceDate(tomorrowInIndia());}
 
 function chunkGroups(groups: PhotoGroup[]) {
   const cards = groups.flatMap((group) =>
@@ -136,8 +138,8 @@ export function buildPhotoMenuPdfDocument(
     .map((page, index) => {
       const first = index === 0;
       const header = first
-        ? `<header class="photo-hero">${logo}<div class="photo-title"><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div><div class="photo-ribbon"><strong>PRE-ORDERS<br/>ONLY</strong><span>${escapeHtml(input.publication.orderCutoff)}</span></div></header>`
-        : `<header class="photo-continuation">${logo}<div><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(serviceDate(input.publication.date))}</span></div></header>`;
+        ? `<header class="photo-hero">${logo}<div class="photo-title"><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(publicationDateLabel(input.publication))}</span></div><div class="photo-ribbon"><strong>PRE-ORDERS<br/>ONLY</strong><span>${escapeHtml(input.publication.orderCutoff)}</span></div></header>`
+        : `<header class="photo-continuation">${logo}<div><b>${escapeHtml(input.publication.title)}</b><span>${escapeHtml(publicationDateLabel(input.publication))}</span></div></header>`;
       const special =
         first && featured
           ? `<section class="photo-special"><div class="special-label">&#9733; TODAY'S SPECIAL ITEM &#9733;</div><img src="${escapeHtml(input.resolveImage(featured.image))}" alt=""/><div><h1>${escapeHtml(featured.name)}</h1><strong>&#8377;${money(featured.price)}</strong><p>${escapeHtml(featured.description || featured.portion || "Freshly prepared with care.")}</p></div></section>`
@@ -174,8 +176,8 @@ export async function exportPhotoOneDayMenuPdf(): Promise<MenuPdfExportResult> {
     resolveImage: assetUrl,
   });
   const target = await dialog.showSaveDialog({
-    title: "Export Gruhswad one-day menu with photos",
-    defaultPath: `gruhswad-one-day-menu-${publication.date}-with-photos.pdf`,
+    title: `Export Gruhswad ${publication.mode==="weekly"?"weekly":"one-day"} menu with photos`,
+    defaultPath: `gruhswad-${publication.mode==="weekly"?"weekly":"one-day"}-menu-${tomorrowInIndia()}-with-photos.pdf`,
     filters: [{ name: "PDF", extensions: ["pdf"] }],
   });
   if (target.canceled || !target.filePath)

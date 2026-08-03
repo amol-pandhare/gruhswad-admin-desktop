@@ -27,6 +27,7 @@
 - The sandboxed preload must remain CommonJS. `electron.vite.config.ts` must emit `out/preload/index.cjs`, and `BrowserWindow` must load that exact file. An ESM preload produces a blank renderer because `window.admin` is never exposed.
 - When launching the built app without a Vite development URL, load `out/renderer/index.html`; call `loadURL` only when `ELECTRON_RENDERER_URL` is present.
 - Preserve the renderer Content Security Policy. Add external origins narrowly and only when a feature requires them.
+- Keep external navigation allowlisted in the trusted main process. The Alpha Initiatives credit must use the fixed `external:open-alpha-initiatives` action; do not replace it with a renderer-controlled URL or a generic `openExternal` bridge.
 - Keep renderer source encoding-safe. Prefer ordinary ASCII punctuation for UI separators and labels; use Unicode escapes in parsers where exact code points matter. Scan for mojibake sequences after editing user-facing strings.
 - `better-sqlite3` is native. After changing Electron, Node, architecture, or dependencies, run `pnpm exec electron-builder install-app-deps` before runtime testing.
 
@@ -47,6 +48,9 @@
 - Before restoring a backup, decrypt it, run SQLite integrity validation, and verify the migration table. Apply a valid staged restore only on restart.
 - Publish only available, web-compatible item IDs. The featured item must belong to the selected set, and duplicate IDs are invalid.
 - Keep the landing announcement in the separate `announcement` app-settings key. Match the web contract: enabled visibility, optional 80-character title, required 280-character message when enabled, paired optional HTTPS link label/URL, and optional ISO start/end timestamps with end after start.
+- Preserve publication backward compatibility: missing `mode` and `weeklyStartDate` normalize to one-day mode. One-day customer dates are derived as tomorrow in `Asia/Kolkata`; weekly output uses the rolling seven-day window beginning tomorrow.
+- Preserve the same-day Operations preorder-window contract as `HH:mm` India-time start/end values with the end strictly later than the start. Legacy Operations records normalize to `00:00`-`21:00`.
+- Preserve `src/renderer/public/alpha-initiatives-credit.png` byte-for-byte from the read-only web source asset. Keep it at the bottom-left of the desktop sidebar with accessible button text and its original aspect ratio.
 - Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
 
 ## Development workflow

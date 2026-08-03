@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CatalogCategory, CatalogItem, MenuImageExportResult, Publication } from "../shared/contracts";
 import { isPublishableItem } from "../shared/catalog";
+import { tomorrowInIndia, weeklyWindow } from "../shared/dates";
 import { getCatalog, getCurrentPublication } from "./database";
 import { renderHtmlImagesToPaths } from "./image-renderer";
 import { recordMenuImageExport } from "./menu-publishing";
@@ -49,7 +50,8 @@ export function buildTemplateMenuImageDocument(input: TemplateInput): TemplateMe
     const itemMap = new Map(input.items.map((item) => [item.id, item]));
     printable = input.publication.itemIds.map((id) => itemMap.get(id)).filter((item): item is CatalogItem => Boolean(item && isPublishableItem(item, input.categories)));
     omittedItemCount = input.publication.itemIds.length - printable.length;
-    title = input.publication.title; subtitle = serviceDate(input.publication.date);
+    const window=weeklyWindow();
+    title = input.publication.title; subtitle = input.publication.mode==="weekly"?`${serviceDate(window[0])} - ${serviceDate(window[6])}`:serviceDate(tomorrowInIndia());
     featured = input.publication.featuredItemId ? printable.find((item) => item.id === input.publication!.featuredItemId) ?? null : null;
   } else printable = input.items.filter((item) => isPublishableItem(item, input.categories)).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   if (!printable.length) throw new Error(input.mode === "one-day" ? "The saved one-day menu has no printable items." : "The catalog has no printable categories or items.");
@@ -70,7 +72,7 @@ function templateUrl() { const path = join(__dirname, "../renderer/catalog", "MA
 async function exportImages(mode: "master" | "one-day") {
   const catalog = getCatalog(), publication = mode === "one-day" ? getCurrentPublication() : null;
   const document = buildTemplateMenuImageDocument({ mode, categories: catalog.categories as CatalogCategory[], items: catalog.items, publication, templateUrl: templateUrl() });
-  const date = mode === "one-day" ? publication!.date : new Date().toISOString().slice(0, 10);
+  const date = mode === "one-day" ? tomorrowInIndia() : new Date().toISOString().slice(0, 10);
   const target = await dialog.showSaveDialog({ title: mode === "master" ? "Export Gruhswad master menu images" : "Export Gruhswad one-day menu images", defaultPath: `gruhswad-${mode === "master" ? "master" : "one-day"}-menu-${date}.png`, filters: [{ name: "PNG image", extensions: ["png"] }] });
   if (target.canceled || !target.filePath) return { canceled: true, paths: [], imageCount: 0, warning: null } satisfies MenuImageExportResult;
   const messages: string[] = [];

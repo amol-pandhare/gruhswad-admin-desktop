@@ -8,12 +8,14 @@ Current release: **0.3.0**. The application includes Overview, cloud Orders, Cat
 
 - **Overview** reports revenue, expenses, profit or loss, order counts, open value, recent orders, and expenses by category. Unresolved conflicts produce a prominent Sync Centre CTA.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
-- **One-day menu** saves a publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. All exports use the latest locally saved publication.
-- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, public-location, and scheduled landing-page announcement configuration.
+- **Publish menu** saves either a one-day or weekly publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. One-day dates resolve to tomorrow in India; weekly output displays a rolling seven-day window. All exports use the latest locally saved publication.
+- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, public-location, scheduled landing-page announcement, and same-day preorder window configuration.
 - **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
 - **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
 
 Closing the application with unresolved conflicts or pushable dirty records opens a native warning. **Go to Sync Centre** keeps the app open and navigates there; **Exit Anyway** preserves the pending state and closes the app.
+
+The sidebar includes the approved **Powered by Alpha Initiatives** attribution at its lower-left edge. Activating it opens <https://alphinitive.vercel.app/> through a fixed, main-process allowlisted action; the renderer cannot supply an arbitrary external URL.
 
 ## Local development
 
@@ -63,13 +65,17 @@ Backups are encrypted with Electron `safeStorage`, making them intentionally tie
 
 Open **Catalog** and use **Export menu PDF** at the upper-left. The export reads the current SQLite catalog and Operations settings, works offline, and opens the native Save dialog. It creates A4 portrait pages with three category columns, readable item text, category banners, recommendations, contact details, and the service footer. Large catalogs receive extra pages instead of smaller text.
 
-## One-day menu and template image exports
+## Published menu and template image exports
 
-The One-day menu page exports a compact saved-menu PDF and a separate photo-layout PDF. Items that have become unavailable, archived, website-incompatible, or assigned to inactive categories are omitted. The featured panel is optional and is removed when its saved item is no longer printable.
+The Publish menu page supports one-day and weekly modes and exports a compact saved-menu PDF and a separate photo-layout PDF. Legacy publications without mode metadata remain compatible and normalize to one-day mode. Items that have become unavailable, archived, website-incompatible, or assigned to inactive categories are omitted. The featured panel is optional and is removed when its saved item is no longer printable.
 
 Catalog and One-day menu also have separate preview and export buttons for 1085 x 1536 PNG images. Every page uses the complete packaged `MASTER-002_Template.png` background and renders text-only dynamic menu content in the available center area. Oversized menus create numbered continuation images instead of shrinking below a readable size.
 
 After a saved export, an in-app gallery opens with whole-image fitting, scrolling, zoom below and above 100%, fixed previous/next controls, arrow-key navigation, page indicators, thumbnails, opening in the default viewer, and showing the file in its destination folder. Preview-only generation does not replace the latest saved export record.
+
+## Brand attribution
+
+`src/renderer/public/alpha-initiatives-credit.png` is the approved Alpha Initiatives attribution artwork copied byte-for-byte from the web project's source asset. Keep its aspect ratio intact and do not recreate or recolor it. The desktop placement is inside the sticky sidebar footer so it stays at the bottom-left without covering operational content.
 
 ## Google Cloud menu publication
 
