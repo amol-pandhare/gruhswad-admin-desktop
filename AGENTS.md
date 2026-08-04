@@ -50,6 +50,8 @@
 - Keep the landing announcement in the separate `announcement` app-settings key. Match the web contract: enabled visibility, optional 80-character title, required 280-character message when enabled, paired optional HTTPS link label/URL, and optional ISO start/end timestamps with end after start.
 - Preserve publication backward compatibility: missing `mode` and `weeklyStartDate` normalize to one-day mode. One-day customer dates are derived as tomorrow in `Asia/Kolkata`; weekly output uses the rolling seven-day window beginning tomorrow.
 - Preserve the same-day Operations preorder-window contract as `HH:mm` India-time start/end values with the end strictly later than the start. Legacy Operations records normalize to `00:00`-`21:00`.
+- Preserve the nullable Operations `closurePeriod` contract as valid `YYYY-MM-DD` India-calendar start/end dates with an inclusive, non-reversed range. A one-day closure stores equal dates and legacy records normalize to `null`.
+- The explicit closure clear action must set `closurePeriod: null` and restore `open: true`. It saves locally and becomes customer-visible only after the existing explicit Sync Centre push; never add an automatic push.
 - Preserve `src/renderer/public/alpha-initiatives-credit.png` byte-for-byte from the read-only web source asset. Keep it at the bottom-left of the desktop sidebar with accessible button text and its original aspect ratio.
 - Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
 

@@ -52,7 +52,7 @@ function App() {
         {page === "expenses" && <ExpensesPage range={range} notify={setNotice} />}
         {page === "reports" && <ReportsPage range={range} notify={setNotice} />}
         {page === "menu" && <MenuPage notify={setNotice} previewImages={setImagePreviewCount} />}
-        {page === "operations" && <><PreorderWindowAdmin notify={setNotice}/><OperationsPage notify={setNotice} /></>}
+        {page === "operations" && <><PreorderWindowAdmin notify={setNotice}/><ClosurePeriodAdmin notify={setNotice}/><OperationsPage notify={setNotice} /></>}
         {page === "inbox" && <Panel title="WhatsApp Inbox"><Empty text="WhatsApp Inbox is temporarily disabled." /></Panel>}
         {page === "sync" && <SyncPage notify={setNotice} />}
         {page === "settings" && <SettingsPage notify={setNotice} />}
@@ -204,6 +204,15 @@ function PreorderWindowAdmin({notify}:{notify:(message:string)=>void}){
   const update=(values:Partial<typeof preorderWindow>)=>setConfig({...config,operations:{...config.operations,preorderWindow:{...preorderWindow,...values}}});
   async function save(){if(!config)return;await window.admin.operations.save(config);notify("Preorder window saved. Push from Sync Centre to update Neon.");}
   return <Panel title="Daily preorder window"><div className="form-grid"><label>Opens at<input type="time" required value={preorderWindow.start} onChange={(event)=>update({start:event.target.value})}/></label><label>Closes at<input type="time" required value={preorderWindow.end} onChange={(event)=>update({end:event.target.value})}/></label></div><p className="muted">India time. The closing time must be later on the same day.</p><button className="primary" disabled={!preorderWindow.start||!preorderWindow.end||preorderWindow.start>=preorderWindow.end} onClick={()=>save().catch((error)=>notify(error.message))}>Save preorder window</button></Panel>;
+}
+
+function ClosurePeriodAdmin({notify}:{notify:(message:string)=>void}){
+  const [config,setConfig]=useState<RuntimeConfig|null>(null);const [startDate,setStartDate]=useState("");const [endDate,setEndDate]=useState("");
+  useEffect(()=>{window.admin.operations.get().then((next)=>{setConfig(next);setStartDate(next.operations.closurePeriod?.startDate??"");setEndDate(next.operations.closurePeriod?.endDate===next.operations.closurePeriod?.startDate?"":next.operations.closurePeriod?.endDate??"");});},[]);
+  if(!config)return null;
+  async function save(){if(!config)return;const closurePeriod=startDate?{startDate,endDate:endDate||startDate}:null;await window.admin.operations.save({...config,operations:{...config.operations,closurePeriod}});notify("Scheduled closure saved. Push from Sync Centre to update Neon.");}
+  async function clear(){if(!config)return;const next={...config,operations:{...config.operations,open:true,closurePeriod:null}};await window.admin.operations.save(next);setConfig(next);setStartDate("");setEndDate("");notify("Scheduled closure cleared. Operations are accepting preorders again; push from Sync Centre to update Neon.");}
+  return <Panel title="Scheduled operations closure"><div className="form-grid"><label>Closure date<input type="date" value={startDate} onChange={(event)=>{setStartDate(event.target.value);if(!event.target.value)setEndDate("");}}/></label><label>End date (optional)<input type="date" min={startDate||undefined} value={endDate} onChange={(event)=>setEndDate(event.target.value)}/></label></div><p className="muted">Leave the end date blank for a one-day closure. Dates are inclusive and use India time.</p><div className="toolbar-actions"><button className="primary" disabled={Boolean(endDate&&(!startDate||endDate<startDate))} onClick={()=>save().catch((error)=>notify(error.message))}>Save scheduled closure</button><button disabled={!startDate&&config.operations.open} onClick={()=>clear().catch((error)=>notify(error.message))}>Clear scheduled closure</button></div></Panel>;
 }
 
 function OperationsPage({ notify }: { notify: (message: string) => void }) {
