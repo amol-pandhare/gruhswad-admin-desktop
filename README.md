@@ -9,7 +9,7 @@ Current release: **0.3.0**. The application includes Overview, cloud Orders, Cat
 - **Overview** reports revenue, expenses, profit or loss, order counts, open value, recent orders, and expenses by category. Unresolved conflicts produce a prominent Sync Centre CTA.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
 - **Publish menu** saves either a one-day or weekly publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. One-day dates resolve to tomorrow in India; weekly output displays a rolling seven-day window. All exports use the latest locally saved publication.
-- **Operations** stores the runtime brand, contact, ordering, fulfilment, service-area, platform, public-location, scheduled landing-page announcement, same-day preorder window, and optional India-calendar closure date/range. Clearing a closure removes its dates and restores accepting preorders locally.
+- **Operations** uses accordion sections for runtime brand, contact, ordering, fulfilment, service area, platforms, public location, an ordered themed announcement collection, the same-day preorder window, and optional India-calendar closures.
 - **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
 - **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
 
@@ -47,7 +47,7 @@ Use separate least-privilege roles. Restrict the desktop sync role to the synchr
 - Local expenses, payments, manual orders, reports, and WhatsApp imports are never pushed.
 - A one-day menu reaches the website only after an explicit push.
 - Dashboard conflict alerts and the safe-exit warning use a fast local-only attention check and do not depend on Neon connectivity.
-- The landing-page announcement is synchronized as the `announcement` app-setting record. Its enabled switch is authoritative; optional ISO start/end times schedule visibility, and an optional CTA requires both a label and an HTTPS URL.
+- Landing announcements synchronize together as `{ maxAnnouncements, items }` in the `announcement` app-setting record. The admin limit is 1-6 (default 6); overflow items remain stored but disabled, and each ordered item supports a theme, optional schedule, and paired HTTPS CTA.
 - Scheduled operations closures are synchronized inside the existing `operations` app-setting record. A one-day closure stores equal start/end dates; ranges are inclusive. Clearing restores `open: true` locally and still requires the normal Sync Centre push to reach the storefront.
 
 Database selection uses `APP_ENV=local|prod`. An encrypted Neon URL saved in Settings takes precedence, followed by `DATABASE_URL_LOCAL` or `DATABASE_URL_PROD`, then the legacy `DATABASE_URL` fallback. Startup synchronization never pushes data and failures remain visible in Sync Centre history.
