@@ -2,7 +2,7 @@
 
 Independent Gruhswad kitchen operations app. Neon is the primary source for web orders and synchronized business data; SQLite keeps an offline desktop cache plus local expenses and reporting data.
 
-Current release: **0.3.0**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
+Current release: **0.3.1**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
 
 ## Current behavior
 
@@ -112,11 +112,38 @@ $env:APP_ENV="prod"
 pnpm.cmd dist
 ```
 
-Artifacts are written to `release/`, including `Gruhswad-Admin-Setup-0.3.0.exe`, its block map, `latest.yml`, and `win-unpacked`. Windows SmartScreen may warn because version 0.3.0 is unsigned.
+Artifacts are written to `release/`, including `Gruhswad-Admin-Setup-0.3.1.exe`, its block map, `latest.yml`, and `win-unpacked`. Windows SmartScreen may warn because version 0.3.1 is unsigned.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml` with `APP_ENV=prod`, builds Windows NSIS plus macOS DMG/ZIP artifacts, and publishes the update metadata consumed by `electron-updater`. Space-free artifact names must stay aligned with `latest.yml` and `latest-mac.yml`. Unsigned macOS builds trigger Gatekeeper; users must explicitly approve the application. Add `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD`, `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` repository secrets to enable signing and notarization in a future release.
+Pushing a `v*` tag runs `.github/workflows/release.yml`; merging a pull request alone intentionally does not publish a release. The tag must exactly match the package version (`0.3.1` uses `v0.3.1`) and point to the reviewed commit on `master`.
 
-The published 0.3.0 release is available at <https://github.com/amol-pandhare/gruhswad-admin-desktop/releases/tag/v0.3.0>.
+The workflow is a gated sequence:
+
+1. Validate the tag/version contract, frozen pnpm lockfile, tests, desktop and webhook type checks, and production build.
+2. Package Windows NSIS and macOS DMG/ZIP independently with Electron Builder `--publish never`.
+3. Upload the complete platform sets as workflow artifacts.
+4. Publish only after both platform jobs succeed, using the sole job granted `contents: write`.
+
+Windows releases contain the installer, blockmap, and `latest.yml`. macOS releases contain DMG and ZIP packages, their blockmaps, and `latest-mac.yml`. Missing required files fail the workflow, and space-free package names must stay aligned with the updater metadata.
+
+The standardized workflow is unsigned and sets `CSC_IDENTITY_AUTO_DISCOVERY=false`; Windows SmartScreen and macOS Gatekeeper warnings are expected. Signing and Apple notarization must be introduced through a separately reviewed change covering credentials, timestamping, renewal, rotation, and verification.
+
+Before tagging a new version:
+
+```powershell
+pnpm.cmd install --frozen-lockfile
+pnpm.cmd test
+pnpm.cmd typecheck
+pnpm.cmd --filter @gruhswad/whatsapp-webhook typecheck
+$env:APP_ENV="prod"
+pnpm.cmd build
+pnpm.cmd release:verify-tag -- v0.3.1
+$env:CSC_IDENTITY_AUTO_DISCOVERY="false"
+pnpm.cmd exec electron-builder --win nsis --publish never
+```
+
+Inspect the installer, blockmap, and `latest.yml`, then smoke-test `release/win-unpacked/Gruhswad Admin.exe` with `ELECTRON_RUN_AS_NODE` unset and isolated `GRUHSWAD_TEST_USER_DATA`. After the reviewed version change is merged, update `master`, create an annotated matching tag, push only that tag, monitor all four workflow jobs, and verify the final GitHub Release assets. Do not move or reuse a published tag; issue a new patch version for release defects.
+
+The published 0.3.1 release is available at <https://github.com/amol-pandhare/gruhswad-admin-desktop/releases/tag/v0.3.1>.
 
 ## Commands
 

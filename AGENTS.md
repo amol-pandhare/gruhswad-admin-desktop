@@ -94,6 +94,15 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - Changes to Electron Builder, signing, or updates require checking both Windows and macOS jobs in `.github/workflows/release.yml`.
 - Packaged runtime smoke tests must unset `ELECTRON_RUN_AS_NODE` and use `GRUHSWAD_TEST_USER_DATA` for an isolated profile. Verify database creation and captured stderr, not merely that the process launched.
 
+## Release invariants
+
+- Releases start only when a `v*` tag is pushed; merging a pull request does not publish a release.
+- The tag must exactly match `v${package.json version}` and point to the reviewed commit on `master`. Never move or reuse a published tag; fix release defects with a new patch version.
+- Keep release validation, Windows packaging, macOS packaging, and GitHub publication as gated jobs. Packaging must use `--publish never`; only the final dependent job may receive `contents: write` and create the release.
+- Preserve the complete artifact sets: Windows installer, blockmap, and `latest.yml`; macOS DMG, ZIP, both blockmaps, and `latest-mac.yml`. Missing artifacts must fail the workflow.
+- CI installs with pnpm's frozen lockfile, runs the repository-required checks, and keeps unsigned signing discovery disabled. Adding signing or notarization requires an explicit security and recovery review.
+- Before tagging, package on an available local platform, inspect updater metadata for filename alignment, and runtime-smoke-test the packaged application. A workflow is not proven until a real tag run and its GitHub Release assets have been verified.
+
 ## Known setup requirements
 
 - GitHub releases publish to `amol-pandhare/gruhswad-admin-desktop`. Keep space-free Windows and macOS artifact names aligned with `latest.yml` and `latest-mac.yml`.

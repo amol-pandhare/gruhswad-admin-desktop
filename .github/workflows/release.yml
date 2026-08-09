@@ -1,40 +1,50 @@
 name: Release desktop apps
+
 on:
   push:
     tags: ["v*"]
-permissions: { contents: write }
+
+permissions:
+  contents: read
+
+env:
+  APP_ENV: prod
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
 jobs:
-  build:
-    strategy: { fail-fast: false, matrix: { os: [windows-latest, macos-latest] } }
-    runs-on: ${{ matrix.os }}
-    env:
-      APP_ENV: prod
+  validate:
+    name: Validate release source
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
         with: { version: 10.15.1 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Verify tag matches package version
+        run: pnpm release:verify-tag
       - run: pnpm test
       - run: pnpm typecheck
-      - if: runner.os == 'Windows'
-        run: pnpm icons:win
-      - if: runner.os == 'macOS'
-        run: bash scripts/generate-mac-icon.sh
-      - name: Configure optional signing
-        run: node scripts/configure-signing-env.mjs
-        env:
-          RELEASE_CERTIFICATE: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE || secrets.WINDOWS_CERTIFICATE }}
-          RELEASE_CERTIFICATE_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE_PASSWORD || secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          RELEASE_APPLE_ID: ${{ secrets.APPLE_ID }}
-          RELEASE_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          RELEASE_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - run: pnpm --filter @gruhswad/whatsapp-webhook typecheck
       - run: pnpm build
-      - run: pnpm exec electron-builder --publish never
-      - name: Collect Windows release files
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+
+  package-windows:
+    name: Package Windows
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.1 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm icons:win
+      - run: pnpm build
+      - run: pnpm exec electron-builder --win nsis --publish never
+      - name: Collect complete Windows release set
+        uses: actions/upload-artifact@v7
         with:
           name: release-windows
           path: |
@@ -42,9 +52,23 @@ jobs:
             release/*.exe.blockmap
             release/latest.yml
           if-no-files-found: error
-      - name: Collect macOS release files
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+
+  package-macos:
+    name: Package macOS
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.1 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/generate-mac-icon.sh
+      - run: pnpm build
+      - run: pnpm exec electron-builder --mac dmg zip --publish never
+      - name: Collect complete macOS release set
+        uses: actions/upload-artifact@v7
         with:
           name: release-macos
           path: |
@@ -56,17 +80,20 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    name: Publish GitHub Release
+    needs: [package-windows, package-macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download verified platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release
           merge-multiple: true
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Publish complete GitHub Release
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           generate_release_notes: true
