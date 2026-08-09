@@ -7,7 +7,10 @@ export const fulfilmentSchema = z.enum(["delivery", "pickup"]);
 export const orderStatusSchema = z.enum(["draft", "confirmed", "preparing", "ready", "completed", "cancelled"]);
 export const cloudOrderStatusSchema = z.enum(["handoff_created", "customer_confirmed_sent", "confirmed", "preparing", "ready", "completed", "cancelled"]);
 export const orderLineSchema = z.object({ menuItemId: z.string().nullable().optional(), name: z.string().min(1), quantity: z.number().int().min(1).max(1000), unitPrice: z.number().nonnegative() });
-export const orderInputSchema = z.object({ id: z.string().optional(), customerName: z.string().min(2), phone: z.string().min(8), serviceDate: dateSchema, fulfilment: fulfilmentSchema, address: z.string().default(""), notes: z.string().default(""), source: z.enum(["manual", "whatsapp", "phone", "walk-in"]).default("manual"), status: orderStatusSchema.default("draft"), lines: z.array(orderLineSchema).min(1) });
+export const customerInputSchema = z.object({ id: z.string().uuid().optional(), name: z.string().trim().min(2).max(120), phone: z.string().trim().min(8).max(20), email: z.string().trim().max(254).default(""), archived: z.boolean().default(false) });
+export const orderingSourceSchema = z.object({ id: z.string().regex(/^[a-z0-9-]+$/), name: z.string().trim().min(1).max(100) });
+export const orderInputSchema = z.object({ id: z.string().uuid().optional(), customer: customerInputSchema, serviceDate: dateSchema, fulfilment: fulfilmentSchema, address: z.string().trim().max(500).default(""), notes: z.string().trim().max(1000).default(""), source: orderingSourceSchema.default({id:"direct",name:"Direct order"}), status: orderStatusSchema.default("confirmed"), lines: z.array(orderLineSchema).min(1) }).superRefine((value,ctx)=>{if(value.fulfilment==="delivery"&&!value.address)ctx.addIssue({code:"custom",path:["address"],message:"Enter a delivery address."});});
+export const unifiedOrderQuerySchema = z.object({ kind:z.enum(["all","online","manual"]).default("all"), range:z.object({from:dateSchema,to:dateSchema}), search:z.string().trim().max(120).default(""), source:z.string().trim().max(100).default("") });
 export const expenseInputSchema = z.object({ id: z.string().optional(), date: dateSchema, category: z.string().min(1), description: z.string().min(1), amount: z.number().positive(), paymentMethod: z.string().min(1), notes: z.string().default("") });
 export const paymentInputSchema = z.object({ orderId: z.string(), amount: z.number().positive(), receivedAt: z.string().min(10), method: z.string().min(1), status: z.enum(["received", "refunded"]).default("received") });
 
@@ -31,6 +34,12 @@ export const runtimeConfigSchema = z.object({ site: siteSchema, operations: oper
 export const publicationSchema = z.object({ mode: z.enum(["one-day", "weekly"]).default("one-day"), date: dateSchema, weeklyStartDate: dateSchema.nullable().default(null), published: z.boolean(), title: z.string().min(1), itemIds: z.array(z.string()).min(1), featuredItemId: z.string().nullable(), orderCutoff: z.string().min(1) }).superRefine((data, ctx) => { if (new Set(data.itemIds).size !== data.itemIds.length) ctx.addIssue({ code: "custom", message: "Duplicate menu items are not allowed." }); if (data.featuredItemId && !data.itemIds.includes(data.featuredItemId)) ctx.addIssue({ code: "custom", message: "Featured item must be selected." }); if (data.mode === "weekly" && !data.weeklyStartDate) ctx.addIssue({ code: "custom", path: ["weeklyStartDate"], message: "Choose the weekly menu activation date." }); });
 
 export type OrderInput = z.infer<typeof orderInputSchema>;
+export type CustomerInput = z.infer<typeof customerInputSchema>;
+export type OrderingSource = z.infer<typeof orderingSourceSchema>;
+export type UnifiedOrderQuery = z.infer<typeof unifiedOrderQuerySchema>;
+export type CustomerSummary = { id:string; name:string; phone:string; email:string|null; archived:boolean; source:"neon"|"local"; createdAt:string; updatedAt:string; addresses:string[] };
+export type UnifiedOrderSummary = { kind:"online"|"manual"; id:string; reference:string; customerName:string; phone:string; email:string|null; serviceDate:string; fulfilment:string; sourceId:string; sourceName:string; status:string; paymentStatus:string; total:number; notes:string; createdAt:string; items:string };
+export type UnifiedOrderDetail = UnifiedOrderSummary & { address:string; lines:Array<{id:string;menuItemId:string|null;name:string;quantity:number;unitPrice:number;lineTotal:number}>; paid:number };
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
 export type CatalogItem = z.infer<typeof catalogItemSchema>;
@@ -54,7 +63,8 @@ export type CatalogImageSaveSelection = { kind: "unchanged" } | { kind: "placeho
 
 export type AdminApi = {
   dashboard(range: DateRange): Promise<Dashboard>;
-  orders: { list(range?: DateRange): Promise<any[]>; save(input: OrderInput): Promise<string>; updateStatus(id: string, status: z.infer<typeof orderStatusSchema>): Promise<void>; addPayment(input: PaymentInput): Promise<void> };
+  orders: { list(range?: DateRange): Promise<any[]>; listUnified(query:UnifiedOrderQuery):Promise<UnifiedOrderSummary[]>; detail(kind:"online"|"manual",id:string):Promise<UnifiedOrderDetail|null>; sources():Promise<OrderingSource[]>; save(input: OrderInput): Promise<string>; updateStatus(id: string, status: z.infer<typeof orderStatusSchema>): Promise<void>; addPayment(input: PaymentInput): Promise<void> };
+  customers: { list(query?:string,includeArchived?:boolean):Promise<CustomerSummary[]>; save(input:CustomerInput):Promise<string>; archive(id:string,archived:boolean):Promise<void>; openWhatsApp(id:string):Promise<void>; composeEmail(id:string):Promise<void> };
   expenses: { list(range?: DateRange): Promise<any[]>; save(input: ExpenseInput): Promise<string>; remove(id: string): Promise<void> };
   catalog: { get(): Promise<{ categories: CatalogCategory[]; items: CatalogItem[] }>; save(item: CatalogItem): Promise<void>; saveWithImage(item: CatalogItem, selection: CatalogImageSaveSelection): Promise<{ item: CatalogItem; warning: string | null }>; imageAssets(): Promise<CatalogImageAsset[]>; chooseImage(): Promise<CatalogImageSelection>; archive(id: string, archived: boolean): Promise<void>; saveCategory(category: CatalogCategory): Promise<void>; setCategoryActive(id: string, active: boolean): Promise<void>; exportPdf(): Promise<MenuPdfExportResult>; exportImages(): Promise<MenuImageExportResult>; previewImages(): Promise<MenuImageExportResult> };
   operations: { get(): Promise<RuntimeConfig>; save(input: RuntimeConfig): Promise<void> };

@@ -1,9 +1,10 @@
-export const pushSectionKeys = ["orders", "catalog", "menu", "operations"] as const;
+export const pushSectionKeys = ["orders", "customers", "catalog", "menu", "operations"] as const;
 export type PushSectionKey = (typeof pushSectionKeys)[number];
 export type PushSectionCounts = Record<PushSectionKey, number>;
 
 export const pushSectionLabels: Record<PushSectionKey, string> = {
   orders: "Orders",
+  customers: "Customers",
   catalog: "Catalog",
   menu: "Menu publication",
   operations: "Operations",
@@ -16,6 +17,7 @@ export type ClassifiedPushCandidate = PushCandidate & { section: PushSectionKey 
 
 export function pushSectionFor(type: string, id: string): PushSectionKey | null {
   if (type === "cloud_order_status") return "orders";
+  if (type === "cloud_customer") return "customers";
   if (type === "catalog_category" || type === "catalog_item") return "catalog";
   if (type === "publication" && id === "current") return "menu";
   if (type === "app_setting" && operationSettingKeys.has(id)) return "operations";
@@ -23,7 +25,7 @@ export function pushSectionFor(type: string, id: string): PushSectionKey | null 
 }
 
 export function emptyPushSectionCounts(): PushSectionCounts {
-  return { orders: 0, catalog: 0, menu: 0, operations: 0 };
+  return { orders: 0, customers:0, catalog: 0, menu: 0, operations: 0 };
 }
 
 export function classifyPushCandidates(rows: PushCandidate[]) {
