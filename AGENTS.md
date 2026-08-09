@@ -4,7 +4,7 @@
 
 - This repository is the independent Electron operations application at `C:\Workspace\gruhswad-admin-desktop`.
 - Treat `C:\Workspace\gruhswad` as read-only. Never implement desktop work by editing the web project.
-- Supported web integration is explicit Neon synchronization for catalog, runtime settings, current publication, and cloud order data using `src/shared/contracts.ts`.
+- Supported web integration is explicit Neon synchronization for catalog, runtime settings, current publication, customer profiles, and cloud order data using `src/shared/contracts.ts`.
 - Never commit credentials, `.env` files, SQLite databases, encrypted backups, signing certificates, Meta webhook payloads, `out`, `release`, or `node_modules`.
 
 ## Stack and repository layout
@@ -37,6 +37,10 @@
 - Pull and push are separate explicit user actions. Never add automatic background push.
 - Preserve dirty records during pull, use optimistic concurrency during push, and require explicit conflict resolution.
 - Expenses, payments, manual orders, reports, and WhatsApp imports are local-only and must never enter a Neon push.
+- Customer profiles are synchronized independently from local manual orders. Recording a manual order may create or update a dirty `cloud_customer`, but must never make the order, its lines, or its payments pushable.
+- Keep the unified Orders identities explicit: online and manual records may share human-facing details but must retain separate stable IDs and `kind` values to prevent double counting or accidental cloud writes.
+- Customer deletion is archive/restore. Normalize phones to E.164 and optional emails to lowercase; resolve WhatsApp and email destinations in the main process from a validated customer ID.
+- Neon customer schema changes belong in `neon-migrations` and require an owner/migration role. Never grant schema-changing permissions to the desktop sync credential.
 - Database changes require a new numbered migration. Never rewrite a migration that may have shipped. Keep foreign keys enabled and preserve WAL mode.
 - Validate renderer input at IPC boundaries with Zod even if the form already validates it.
 - Cash-basis revenue includes received payments minus refunds. Profit is cash revenue minus expenses recorded within the selected period.

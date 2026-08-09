@@ -1,9 +1,10 @@
 import { describe,expect,it } from "vitest";
-import { announcementSchema, catalogCategorySchema, catalogItemSchema, operationsSchema, publicationSchema } from "../src/shared/contracts";
+import { announcementSchema, catalogCategorySchema, catalogItemSchema, operationsSchema, orderInputSchema, publicationSchema, unifiedOrderQuerySchema } from "../src/shared/contracts";
 import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../src/shared/catalog";
 import { cashSummary } from "../src/shared/reports";
 import { parseStructuredOrder } from "../src/shared/whatsapp";
 import { resolveDatabaseConnection } from "../src/shared/environment";
+import { normalizeCustomerEmail, normalizeCustomerPhone } from "../src/shared/customers";
 import { normalizeServiceDate, normalizeTimestamp } from "../src/shared/dates";
 import { classifyPushCandidates, pushSectionFor } from "../src/shared/push-policy";
 import { normalizeRuntimeSetting, runtimeConfigFromSettings } from "../src/shared/runtime-config";
@@ -36,8 +37,9 @@ describe("Operations SQLite payload normalization",()=>{
 });
 
 describe("Neon push allowlist",()=>{
-  it("maps only the supported records to the four admin sections",()=>{
+  it("maps only supported records to the admin sections",()=>{
     expect(pushSectionFor("cloud_order_status","order-1")).toBe("orders");
+    expect(pushSectionFor("cloud_customer","customer-1")).toBe("customers");
     expect(pushSectionFor("catalog_category","street-food")).toBe("catalog");
     expect(pushSectionFor("catalog_item","pani-puri")).toBe("catalog");
     expect(pushSectionFor("publication","current")).toBe("menu");
@@ -48,15 +50,18 @@ describe("Neon push allowlist",()=>{
     const result=classifyPushCandidates(rows);
     expect(result.pushable).toHaveLength(0);
     expect(result.excluded).toHaveLength(rows.length);
-    expect(result.sections).toEqual({orders:0,catalog:0,menu:0,operations:0});
+    expect(result.sections).toEqual({orders:0,customers:0,catalog:0,menu:0,operations:0});
   });
   it("reports section and excluded counts from one central classifier",()=>{
-    const result=classifyPushCandidates([{type:"cloud_order_status",id:"o1"},{type:"catalog_category",id:"c1"},{type:"catalog_item",id:"i1"},{type:"publication",id:"current"},{type:"app_setting",id:"site"},{type:"expense",id:"e1"}]);
-    expect(result.sections).toEqual({orders:1,catalog:2,menu:1,operations:1});
-    expect(result.pushable).toHaveLength(5);
+    const result=classifyPushCandidates([{type:"cloud_order_status",id:"o1"},{type:"cloud_customer",id:"u1"},{type:"catalog_category",id:"c1"},{type:"catalog_item",id:"i1"},{type:"publication",id:"current"},{type:"app_setting",id:"site"},{type:"expense",id:"e1"}]);
+    expect(result.sections).toEqual({orders:1,customers:1,catalog:2,menu:1,operations:1});
+    expect(result.pushable).toHaveLength(6);
     expect(result.excluded).toHaveLength(1);
   });
 });
+
+describe("customer contact normalization",()=>{it("normalizes Indian and international phones",()=>{expect(normalizeCustomerPhone("98765 43210")).toBe("+919876543210");expect(normalizeCustomerPhone("+1 415 555 0123")).toBe("+14155550123");});it("normalizes optional email",()=>{expect(normalizeCustomerEmail("  AMOL@Example.COM ")).toBe("amol@example.com");expect(normalizeCustomerEmail(" ")).toBeNull();expect(()=>normalizeCustomerEmail("not-an-email")).toThrow(/valid email/i);});});
+describe("manual order contracts",()=>{const valid={customer:{name:"Manual Customer",phone:"9876543210",email:"",archived:false},serviceDate:"2026-08-08",fulfilment:"pickup",address:"",notes:"",source:{id:"direct",name:"Direct order"},status:"confirmed",lines:[{menuItemId:null,name:"Custom lunch",quantity:2,unitPrice:125}]};it("accepts catalog or custom local lines and a snapshotted source",()=>expect(orderInputSchema.parse(valid)).toMatchObject(valid));it("requires an address for delivery",()=>expect(orderInputSchema.safeParse({...valid,fulfilment:"delivery"}).success).toBe(false));it("validates unified order filters",()=>expect(unifiedOrderQuerySchema.parse({range:{from:"2026-08-01",to:"2026-08-31"}})).toEqual({kind:"all",range:{from:"2026-08-01",to:"2026-08-31"},search:"",source:""}));});
 
 describe("database environment selection",()=>{
   it("selects local and production URLs",()=>{expect(resolveDatabaseConnection({processEnv:{APP_ENV:"local",DATABASE_URL_LOCAL:"local-db",DATABASE_URL_PROD:"prod-db"}})).toMatchObject({environment:"local",source:"environment-local",url:"local-db"});expect(resolveDatabaseConnection({processEnv:{APP_ENV:"prod",DATABASE_URL_LOCAL:"local-db",DATABASE_URL_PROD:"prod-db"}})).toMatchObject({environment:"prod",source:"environment-prod",url:"prod-db"});});
