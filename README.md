@@ -2,6 +2,8 @@
 
 Independent Gruhswad kitchen operations app. Neon is the primary source for web orders and synchronized business data; SQLite keeps an offline desktop cache plus local expenses and reporting data.
 
+While running, the app checks Neon every 60 seconds for newly persisted website enquiries. The first run establishes a baseline; later starts catch up missed rows and show deduplicated native notifications. Apply `neon-migrations/0002_enquiry_read_access.sql` as the Neon owner after confirming the deployed least-privilege sync role name.
+
 Current release: **0.3.1**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
 
 ## Current behavior

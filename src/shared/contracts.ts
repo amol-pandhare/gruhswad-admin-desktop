@@ -60,6 +60,7 @@ export type MenuImagePublishResult = { publishedAt: string; bucket: string; menu
 export type CatalogImageAsset = { filename: string; source: "packaged"; previewUrl: string };
 export type CatalogImageSelection = { canceled: boolean; token: string | null; originalName: string | null; format: "jpg" | "png" | "webp" | null; previewDataUrl: string | null };
 export type CatalogImageSaveSelection = { kind: "unchanged" } | { kind: "placeholder" } | { kind: "asset"; filename: string } | { kind: "browse"; token: string };
+export type EnquiryDetail={id:string;reference:string;type:"party"|"bulk"|"tiffin";status:"new"|"contacted"|"quoted"|"converted"|"closed";customer:{name:string;phone:string;email?:string|null};address:Record<string,unknown>|null;requirements:Record<string,unknown>;items:Array<{id:string;name:string;portion:string;price:number}>;source:string;createdAt:string;updatedAt:string;events?:Array<Record<string,unknown>>};
 
 export type AdminApi = {
   dashboard(range: DateRange): Promise<Dashboard>;
@@ -77,5 +78,6 @@ export type AdminApi = {
   reports: { exportCsv(kind: "orders" | "expenses" | "summary", range: DateRange): Promise<string | null> };
   inbox: { list(): Promise<any[]>; sync(): Promise<{ imported: number; unmatched: number }>; createOrder(importId: string): Promise<string> };
   settings: { get(): Promise<Record<string, string | boolean>>; set(values: Record<string, string>, secrets?: Record<string, string>): Promise<void>; importGcsCredentials(): Promise<{ canceled: boolean; configured: boolean }>; backup(): Promise<string | null>; restore(): Promise<boolean> };
+  enquiries:{list(input:{query:string;type:string;status:string;from:string;to:string}):Promise<EnquiryDetail[]>;detail(id:string):Promise<EnquiryDetail|null>;count():Promise<number>;updateStatus(id:string,status:EnquiryDetail["status"]):Promise<EnquiryDetail|null>;preference():Promise<boolean>;setPreference(enabled:boolean):Promise<void>;openWhatsApp(id:string):Promise<void>;composeEmail(id:string):Promise<void>;call(id:string):Promise<void>;copyReference(id:string):Promise<void>;onOpen(callback:(detail:EnquiryDetail)=>void):()=>void};
   updates: { check(): Promise<void>; install(): Promise<void>; onStatus(callback: (status: string) => void): () => void };
 };
