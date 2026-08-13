@@ -2,7 +2,7 @@
 
 Independent Gruhswad kitchen operations app. Neon is the primary source for web orders and synchronized business data; SQLite keeps an offline desktop cache plus local expenses and reporting data.
 
-While running, the app checks Neon every 60 seconds for newly persisted website enquiries. The first run establishes a baseline; later starts catch up missed rows and show deduplicated native notifications. Apply `neon-migrations/0002_enquiry_read_access.sql` as the Neon owner after confirming the deployed least-privilege sync role name.
+While running, the app checks Neon every 60 seconds for newly persisted website enquiries. The first run establishes a baseline; later starts catch up missed rows, refresh the Enquiries badge/list, and show deduplicated native notifications.
 
 Current release: **0.3.1**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
 
@@ -10,6 +10,7 @@ Current release: **0.3.1**. The application includes Overview, cloud Orders, Cat
 
 - **Overview** combines online and local manual orders for revenue, order counts, open value, averages, and recent activity. Unresolved conflicts produce a prominent Sync Centre CTA.
 - **Orders** has All, Online, and Manual views under one section. Online orders remain Neon-backed; structured manual orders, custom lines, statuses, and payments stay local-only. Shared service-date and source filters apply across the views.
+- **Enquiries** searches and filters Party, Bulk, and Tiffin requests, shows complete captured customer/requirement/item snapshots and event history, opens trusted contact actions, and changes status through Neon's restricted transition function.
 - **Customers** combines pulled Neon profiles with locally created profiles, supports email, archive/restore, WhatsApp/email shortcuts, and prefilled manual-order creation. Customer changes synchronize only through the explicit Sync Centre push.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
 - **Publish menu** saves either a one-day or weekly publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. One-day dates resolve to tomorrow in India; weekly output displays a rolling seven-day window. All exports use the latest locally saved publication.
@@ -38,7 +39,9 @@ Packaged applications load append-only migrations from `resources/drizzle`. Elec
 
 ## Neon permissions
 
-Use separate least-privilege roles. Restrict the desktop sync role to the synchronized catalog, settings, publication, customer, address, order, line, and event tables. Keep the webhook role restricted to `whatsapp_inbox`. Never use a Neon owner credential in the application.
+Use separate least-privilege roles. Restrict the desktop sync role to the synchronized catalog, settings, publication, customer, address, order, line, and event tables, plus read-only enquiry/event access and execution of the enquiry transition function. Keep the webhook role restricted to `whatsapp_inbox`. Never use a Neon owner credential in the application.
+
+Apply `neon-migrations/0002_enquiry_read_access.sql` and `neon-migrations/0003_desktop_sync_role.sql` as the Neon owner or migration role. The application connection must use the dedicated login role that is a member of `gruhswad_desktop_sync`; do not place an owner URL in Settings or `.env`.
 
 ## Offline synchronization
 

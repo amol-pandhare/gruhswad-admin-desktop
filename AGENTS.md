@@ -34,6 +34,7 @@
 ## Data and behavior rules
 
 - Neon is authoritative for web orders and synchronized Gruhswad business data. SQLite is the durable offline cache and remains authoritative for desktop-only finance records.
+- Website enquiries remain authoritative in Neon. The desktop uses a read-only `(created_at,id)` cursor poll for native alerts and stores only its notification cursor/preference locally. The Enquiries section reads list/detail/event data directly and changes status only through the restricted Neon transition function; never add direct table writes or include enquiries in Sync Centre pushes.
 - Pull and push are separate explicit user actions. Never add automatic background push.
 - Preserve dirty records during pull, use optimistic concurrency during push, and require explicit conflict resolution.
 - Expenses, payments, manual orders, reports, and WhatsApp imports are local-only and must never enter a Neon push.
