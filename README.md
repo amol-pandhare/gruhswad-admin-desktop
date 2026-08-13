@@ -14,7 +14,7 @@ Current release: **0.3.1**. The application includes Overview, cloud Orders, Cat
 - **Customers** combines pulled Neon profiles with locally created profiles, supports email, archive/restore, WhatsApp/email shortcuts, and prefilled manual-order creation. Customer changes synchronize only through the explicit Sync Centre push.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
 - **Publish menu** saves either a one-day or weekly publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. One-day dates resolve to tomorrow in India; weekly output displays a rolling seven-day window. All exports use the latest locally saved publication.
-- **Operations** uses accordion sections for runtime brand, contact, ordering, fulfilment, service area, platforms, public location, an ordered themed announcement collection, the same-day preorder window, and optional India-calendar closures.
+- **Operations** uses accordion sections for runtime brand, contact, ordering, fulfilment, Party/Bulk guest capacity, service area, platforms, public location, an ordered themed announcement collection, the same-day preorder window, and optional India-calendar closures.
 - **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
 - **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
 
@@ -35,13 +35,19 @@ Local image selection is validated in the trusted main process, limited to 10 MB
 
 The SQLite database is created in Electron's per-user application-data directory. The bundled master-menu snapshot is used only to seed an empty database; subsequent reads come from SQLite.
 
+## Local data profiles
+
+Settings exposes two fixed, restart-switched SQLite profiles. Production remains at `C:\Users\amolp\AppData\Roaming\gruhswad-admin-desktop\gruhswad-admin.db`; Intensive testing uses `C:\Users\amolp\AppData\Roaming\gruhswad-admin-desktop-testing\gruhswad-admin.db`. The active selection is stored outside both profiles at `C:\Users\amolp\AppData\Roaming\gruhswad-admin-desktop-profile.json` so it can be resolved before SQLite opens.
+
+Create or refresh the test copy only from the Production profile. The app uses SQLite's online backup API, validates integrity and migration history, and preserves the previous test database as a timestamped safety copy. WAL/SHM files, encrypted secrets, caches, and staged restores are not copied. The Intensive testing profile forces `APP_ENV=prod`, which in this deployment intentionally selects `DATABASE_URL_PROD` for the designated least-privilege Neon child branch.
+
 Packaged applications load append-only migrations from `resources/drizzle`. Electron Builder's `extraResources` entry must remain in place or fresh installs and upgrades will fail at startup.
 
 ## Neon permissions
 
 Use separate least-privilege roles. Restrict the desktop sync role to the synchronized catalog, settings, publication, customer, address, order, line, and event tables, plus read-only enquiry/event access and execution of the enquiry transition function. Keep the webhook role restricted to `whatsapp_inbox`. Never use a Neon owner credential in the application.
 
-Apply `neon-migrations/0002_enquiry_read_access.sql` and `neon-migrations/0003_desktop_sync_role.sql` as the Neon owner or migration role. The application connection must use the dedicated login role that is a member of `gruhswad_desktop_sync`; do not place an owner URL in Settings or `.env`.
+Apply `neon-migrations/0002_enquiry_read_access.sql`, `neon-migrations/0003_desktop_sync_role.sql`, and `neon-migrations/0004_enquiry_seen_state.sql` as the Neon owner or migration role. Migration `0004` adds `enquiries.seen_at` and grants the group role execution of `gruhswad_mark_enquiry_seen(uuid)`. The application connection must use the dedicated login role that is a member of `gruhswad_desktop_sync`; do not place an owner URL in Settings or `.env`. Apply the migrations separately to every Neon branch used by the app because roles, passwords, and branch schema state must be verified for the target endpoint.
 
 ## Offline synchronization
 
@@ -56,6 +62,9 @@ Apply `neon-migrations/0002_enquiry_read_access.sql` and `neon-migrations/0003_d
 - Dashboard conflict alerts and the safe-exit warning use a fast local-only attention check and do not depend on Neon connectivity.
 - Landing announcements synchronize together as `{ maxAnnouncements, items }` in the `announcement` app-setting record. The admin limit is 1-6 (default 6); overflow items remain stored but disabled, and each ordered item supports a theme, optional schedule, and paired HTTPS CTA.
 - Scheduled operations closures are synchronized inside the existing `operations` app-setting record. A one-day closure stores equal start/end dates; ranges are inclusive. Clearing restores `open: true` locally and still requires the normal Sync Centre push to reach the storefront.
+- Party/Bulk enquiry capacity is stored as `maxPartyBulkGuests` in the same Operations app-setting (1-500, default 25 for legacy records). Save locally and push Operations from Sync Centre before the storefront uses a change.
+- The enquiry poll refreshes the badge and visible Enquiries list immediately when Neon returns new rows. Native alerts can be enabled and tested in Settings; if Windows blocks or does not support them, the running app shows an in-app fallback while continuing cursor advancement.
+- Enquiry unread state is separate from workflow status. Opening an enquiry marks it seen through the restricted Neon function, immediately updates the unread badge, and leaves `new`, `contacted`, `quoted`, `converted`, or `closed` unchanged.
 
 Database selection uses `APP_ENV=local|prod`. An encrypted Neon URL saved in Settings takes precedence, followed by `DATABASE_URL_LOCAL` or `DATABASE_URL_PROD`, then the legacy `DATABASE_URL` fallback. Startup synchronization never pushes data and failures remain visible in Sync Centre history.
 
