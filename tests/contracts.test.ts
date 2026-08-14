@@ -1,5 +1,5 @@
 import { describe,expect,it } from "vitest";
-import { announcementSchema, catalogCategorySchema, catalogItemSchema, operationsSchema, orderInputSchema, publicationSchema, unifiedOrderQuerySchema } from "../src/shared/contracts";
+import { announcementSchema, catalogCategorySchema, catalogItemSchema, notificationSettingsSchema, operationsSchema, orderInputSchema, publicationSchema, unifiedOrderQuerySchema } from "../src/shared/contracts";
 import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../src/shared/catalog";
 import { cashSummary } from "../src/shared/reports";
 import { parseStructuredOrder } from "../src/shared/whatsapp";
@@ -30,6 +30,8 @@ describe("Operations SQLite payload normalization",()=>{
   it("normalizes missing legacy announcement state to an empty collection",()=>expect(runtimeConfigFromSettings({}).announcements).toEqual({maxAnnouncements:6,items:[]}));
   it("normalizes legacy Operations payloads to the midnight-to-9-PM preorder window",()=>expect(normalizeRuntimeSetting("operations",{open:true,pickupEnabled:true,deliveryEnabled:false,message:""}).preorderWindow).toEqual({start:"00:00",end:"21:00"}));
   it("normalizes legacy Operations payloads to a 25-guest Party/Bulk capacity",()=>expect(normalizeRuntimeSetting("operations",{open:true,pickupEnabled:true,deliveryEnabled:false,message:""}).maxPartyBulkGuests).toBe(25));
+  it("normalizes missing notification settings and lowercases a valid recipient",()=>{expect(runtimeConfigFromSettings({}).notifications).toEqual({backupEmail:""});expect(normalizeRuntimeSetting("notification",{backupEmail:" Admin@Example.COM "})).toEqual({backupEmail:"admin@example.com"});});
+  it("rejects malformed backup notification recipients",()=>expect(notificationSettingsSchema.safeParse({backupEmail:"not-an-email"}).success).toBe(false));
   it("accepts only Party/Bulk capacities from 1 to 500",()=>{const base={open:true,pickupEnabled:true,deliveryEnabled:false,message:""};expect(operationsSchema.safeParse({...base,maxPartyBulkGuests:100}).success).toBe(true);expect(operationsSchema.safeParse({...base,maxPartyBulkGuests:0}).success).toBe(false);expect(operationsSchema.safeParse({...base,maxPartyBulkGuests:501}).success).toBe(false);});
   it("normalizes legacy Operations payloads with no closure schedule",()=>expect(normalizeRuntimeSetting("operations",{open:true,pickupEnabled:true,deliveryEnabled:false,message:""}).closurePeriod).toBeNull());
   it("accepts only a valid same-day preorder window",()=>{const base={open:true,pickupEnabled:true,deliveryEnabled:false,message:""};expect(operationsSchema.safeParse({...base,preorderWindow:{start:"08:30",end:"20:45"}}).success).toBe(true);for(const preorderWindow of [{start:"21:00",end:"09:00"},{start:"09:00",end:"09:00"},{start:"9:00",end:"21:00"}])expect(operationsSchema.safeParse({...base,preorderWindow}).success).toBe(false);});
@@ -45,7 +47,7 @@ describe("Neon push allowlist",()=>{
     expect(pushSectionFor("catalog_category","street-food")).toBe("catalog");
     expect(pushSectionFor("catalog_item","pani-puri")).toBe("catalog");
     expect(pushSectionFor("publication","current")).toBe("menu");
-    for(const key of ["site","operations","announcement","service_area","ordering_platforms","public_location"])expect(pushSectionFor("app_setting",key)).toBe("operations");
+    for(const key of ["site","operations","notification","announcement","service_area","ordering_platforms","public_location"])expect(pushSectionFor("app_setting",key)).toBe("operations");
   });
   it("excludes finance, desktop settings and unsupported cloud writes",()=>{
     const rows=[{type:"expense",id:"e1"},{type:"payment",id:"p1"},{type:"whatsapp_import",id:"w1"},{type:"credential",id:"neon"},{type:"app_setting",id:"desktop_theme"},{type:"publication",id:"history"},{type:"cloud_order",id:"o1"},{type:"unknown",id:"x"}];
