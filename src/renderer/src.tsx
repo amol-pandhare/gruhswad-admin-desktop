@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CatalogCategory, CatalogImageSaveSelection, CatalogItem, CustomerInput, CustomerSummary, Dashboard, DateRange, EnquiryDetail, LocalDataProfileState, MenuImagePublicationStatus, OrderingSource, Publication, PushPreview, RuntimeConfig, SyncAttentionStatus, SyncPreview, SyncStatus, UnifiedOrderDetail, UnifiedOrderSummary } from "../shared/contracts";
 import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../shared/catalog";
@@ -24,12 +24,36 @@ const nav: [Page, string, string][] = [
 ];
 const pageTitles:Record<Page,string>={dashboard:"Overview",enquiries:"Enquiries",orders:"Orders",customers:"Customers",catalog:"Catalog",menu:"Publish menu",operations:"Operations",expenses:"Expenses",reports:"Reports",inbox:"WhatsApp inbox",sync:"Sync Centre",settings:"Settings"};
 
+type ToastTone = "success" | "error" | "info";
+type ToastMessage = { id: number; message: string; tone: ToastTone };
+let nextToastId = 0;
+
+function toastTone(message: string): ToastTone {
+  if (/\b(error|failed|failure|could not|unable|invalid|missing|rejected|unavailable|not configured)\b/i.test(message)) return "error";
+  if (/\b(saved|updated|complete|completed|generated|exported|copied|recorded|published|resolved|restored|created|imported|sent|opened|success)\b/i.test(message)) return "success";
+  if (/\b(cancelled|canceled|temporarily disabled|new enquir(?:y|ies)|already published|notice|warning)\b/i.test(message)) return "info";
+  return "error";
+}
+
+function ToastItem({ toast, dismiss }: { toast: ToastMessage; dismiss(id: number): void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => dismiss(toast.id), toast.tone === "error" ? 9000 : 6000);
+    return () => window.clearTimeout(timer);
+  }, [dismiss, toast.id, toast.tone]);
+  const title = toast.tone === "error" ? "Action needs attention" : toast.tone === "success" ? "Success" : "Notice";
+  return <div className={`toast ${toast.tone}`} role={toast.tone === "error" ? "alert" : "status"}><span className="toast-mark" aria-hidden="true">{toast.tone === "error" ? "!" : toast.tone === "success" ? "\u2713" : "i"}</span><div><strong>{title}</strong><p>{toast.message}</p></div><button type="button" aria-label={`Dismiss ${title.toLowerCase()}`} onClick={() => dismiss(toast.id)}>{"\u00d7"}</button></div>;
+}
+
+function ToastRegion({ toasts, dismiss }: { toasts: ToastMessage[]; dismiss(id: number): void }) {
+  return <div className="toast-region" aria-label="Application notifications">{toasts.map((toast) => <ToastItem toast={toast} dismiss={dismiss} key={toast.id} />)}</div>;
+}
+
 function UtilityIcon({name}:{name:"settings"|"sync"|"whatsapp"}){const paths={settings:<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,sync:<><path d="M20 7h-6V1"/><path d="m20 1-6 6a8 8 0 1 0 2.3 8.7"/></>,whatsapp:<><path d="M20 11.5a8 8 0 0 1-11.8 7L3 20l1.5-5.1A8 8 0 1 1 20 11.5Z"/><path d="M8.5 8.2c.5 3 2.3 4.8 5.3 5.3"/></>};return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;}
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [range, setRange] = useState(monthRange);
-  const [notice, setNotice] = useState("");
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [dataVersion, setDataVersion] = useState(0);
   const [startupLoading, setStartupLoading] = useState(true);
   const [imagePreviewCount, setImagePreviewCount] = useState(0);
@@ -39,41 +63,46 @@ function App() {
   const [newEnquiries,setNewEnquiries]=useState(0);
   const [enquiryDataVersion,setEnquiryDataVersion]=useState(0);
   const [localProfile,setLocalProfile]=useState<LocalDataProfileState|null>(null);
+  const dismissToast = useCallback((id: number) => setToasts((current) => current.filter((toast) => toast.id !== id)), []);
+  const notify = useCallback((message: string) => {
+    const normalized = message.trim();
+    if (!normalized) return;
+    setToasts((current) => [...current.slice(-3), { id: ++nextToastId, message: normalized, tone: toastTone(normalized) }]);
+  }, []);
   useEffect(() => window.admin.sync.onStartupPullComplete(() => setDataVersion((value) => value + 1)), []);
   useEffect(() => {const started=Date.now();const finish=()=>setTimeout(()=>setStartupLoading(false),Math.max(0,700-(Date.now()-started)));const unsubscribe=window.admin.sync.onStartupPullSettled(finish);const safety=setTimeout(()=>setStartupLoading(false),8000);return()=>{unsubscribe();clearTimeout(safety);};}, []);
   useEffect(() => window.admin.sync.onNavigateToSync(() => setPage("sync")), []);
   const refreshEnquiryCount=()=>window.admin.enquiries.count().then(value=>{if(value!==null)setNewEnquiries(value)}).catch(()=>undefined);
   useEffect(()=>{void refreshEnquiryCount();const timer=setInterval(refreshEnquiryCount,60_000);return()=>clearInterval(timer)},[]);
-  useEffect(()=>window.admin.enquiries.onArrived(event=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1);setEnquiry(current=>{if(current&&event.items.some(item=>item.id===current.id))void window.admin.enquiries.detail(current.id).then(value=>setEnquiry(latest=>value&&latest?.id===current.id?value:latest));return current});const fallback=enquiryArrivalFallback(event);if(fallback)setNotice(fallback)}),[]);
+  useEffect(()=>window.admin.enquiries.onArrived(event=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1);setEnquiry(current=>{if(current&&event.items.some(item=>item.id===current.id))void window.admin.enquiries.detail(current.id).then(value=>setEnquiry(latest=>value&&latest?.id===current.id?value:latest));return current});const fallback=enquiryArrivalFallback(event);if(fallback)notify(fallback)}),[notify]);
   useEffect(()=>window.admin.enquiries.onOpen(detail=>{setPage("enquiries");setEnquiry(detail);void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}),[]);
   useEffect(()=>{window.admin.settings.get().then(value=>setLocalProfile(value.localProfiles))},[]);
   const title = pageTitles[page];
   return <>{startupLoading&&<StartupLoader/>}<div className="app-shell">
     <aside><div className="brand"><b>G</b><div><strong>Gruhswad</strong><span>Kitchen admin</span></div></div>
-      <div className="utility-nav" aria-label="Administration shortcuts"><button className={page==="settings"?"active":""} title="Settings" aria-label="Settings" onClick={()=>setPage("settings")}><UtilityIcon name="settings"/></button><button className={page==="sync"?"active":""} title="Sync Centre" aria-label="Sync Centre" onClick={()=>setPage("sync")}><UtilityIcon name="sync"/></button><button className="disabled" title="WhatsApp Inbox - coming soon" aria-label="WhatsApp Inbox is temporarily disabled" aria-disabled="true" onClick={()=>setNotice("WhatsApp Inbox is temporarily disabled. We can enable it when required.")}><UtilityIcon name="whatsapp"/><span>Coming soon</span></button></div>
+      <div className="utility-nav" aria-label="Administration shortcuts"><button className={page==="settings"?"active":""} title="Settings" aria-label="Settings" onClick={()=>setPage("settings")}><UtilityIcon name="settings"/></button><button className={page==="sync"?"active":""} title="Sync Centre" aria-label="Sync Centre" onClick={()=>setPage("sync")}><UtilityIcon name="sync"/></button><button className="disabled" title="WhatsApp Inbox - coming soon" aria-label="WhatsApp Inbox is temporarily disabled" aria-disabled="true" onClick={()=>notify("WhatsApp Inbox is temporarily disabled. We can enable it when required.")}><UtilityIcon name="whatsapp"/><span>Coming soon</span></button></div>
       <nav>{nav.map(([id, label, icon]) => <button className={page === id ? "active" : ""} onClick={() => setPage(id)} key={id}><i>{icon}</i>{label}{id==="enquiries"&&newEnquiries>0?<span className="nav-badge">{newEnquiries}</span>:null}</button>)}</nav>
       <div className="side-note"><span>Local-first</span><p>Your operational data stays on this computer.</p></div>
       <div className="alpha-credit"><button type="button" aria-label="Powered by Alpha Initiatives" title="Open Alpha Initiatives" onClick={()=>window.admin.external.openAlphaInitiatives()}><img src="./alpha-initiatives-credit.png" alt=""/></button></div>
     </aside>
     <main><header><div><small>HOME KITCHEN OPERATIONS</small><h1>{title}</h1></div>{localProfile?.active==="intensive-testing"&&<strong className="testing-profile-badge">Intensive testing</strong>}{!(["menu", "settings", "inbox", "catalog", "operations", "orders", "customers", "sync"] as Page[]).includes(page) && <DateFilter range={range} setRange={setRange} />}</header>
-      {notice && <div className="notice" onClick={() => setNotice("")}>{notice}</div>}
-      {page === "settings" && <NotificationSetting notify={setNotice}/>}
+      {page === "settings" && <NotificationSetting notify={notify}/>}
       <React.Fragment key={`${page}-${dataVersion}`}>
         {page === "dashboard" && <DashboardPage range={range} openSync={()=>setPage("sync")} />}
-        {page === "enquiries" && <EnquiriesPage notify={setNotice} dataVersion={enquiryDataVersion} onViewed={()=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}} />}
-        {page === "orders" && <UnifiedOrdersPage notify={setNotice} initialTab={orderTab} prefillCustomerId={orderCustomerId} clearPrefill={()=>setOrderCustomerId(null)} />}
-        {page === "customers" && <CustomersPage notify={setNotice} newOrder={(id)=>{setOrderCustomerId(id);setOrderTab("manual");setPage("orders");}} />}
-        {page === "catalog" && <CatalogPage notify={setNotice} previewImages={setImagePreviewCount} />}
-        {page === "expenses" && <ExpensesPage range={range} notify={setNotice} />}
-        {page === "reports" && <ReportsPage range={range} notify={setNotice} />}
-        {page === "menu" && <MenuPage notify={setNotice} previewImages={setImagePreviewCount} />}
-        {page === "operations" && <OperationsPage notify={setNotice} />}
+        {page === "enquiries" && <EnquiriesPage notify={notify} dataVersion={enquiryDataVersion} onViewed={()=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}} />}
+        {page === "orders" && <UnifiedOrdersPage notify={notify} initialTab={orderTab} prefillCustomerId={orderCustomerId} clearPrefill={()=>setOrderCustomerId(null)} />}
+        {page === "customers" && <CustomersPage notify={notify} newOrder={(id)=>{setOrderCustomerId(id);setOrderTab("manual");setPage("orders");}} />}
+        {page === "catalog" && <CatalogPage notify={notify} previewImages={setImagePreviewCount} />}
+        {page === "expenses" && <ExpensesPage range={range} notify={notify} />}
+        {page === "reports" && <ReportsPage range={range} notify={notify} />}
+        {page === "menu" && <MenuPage notify={notify} previewImages={setImagePreviewCount} />}
+        {page === "operations" && <OperationsPage notify={notify} />}
         {page === "inbox" && <Panel title="WhatsApp Inbox"><Empty text="WhatsApp Inbox is temporarily disabled." /></Panel>}
-        {page === "sync" && <SyncPage notify={setNotice} />}
-        {page === "settings" && <SettingsPage notify={setNotice} />}
+        {page === "sync" && <SyncPage notify={notify} />}
+        {page === "settings" && <SettingsPage notify={notify} />}
       </React.Fragment>
     </main>
-  </div>{imagePreviewCount>0&&<ImagePreviewModal count={imagePreviewCount} close={()=>setImagePreviewCount(0)} notify={setNotice}/>} {enquiry&&<EnquiryDetailModal detail={enquiry} close={()=>setEnquiry(null)} notify={setNotice}/>}</>;
+  </div><ToastRegion toasts={toasts} dismiss={dismissToast}/>{imagePreviewCount>0&&<ImagePreviewModal count={imagePreviewCount} close={()=>setImagePreviewCount(0)} notify={notify}/>} {enquiry&&<EnquiryDetailModal detail={enquiry} close={()=>setEnquiry(null)} notify={notify}/>}</>;
 }
 
 function EnquiryDetailModal({detail,close,notify}:{detail:EnquiryDetail;close():void;notify(message:string):void}){return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`${detail.type} enquiry ${detail.reference}`}><section className="inline-form enquiry-detail"><div><small>{detail.type.toUpperCase()} ENQUIRY</small><h2>{detail.reference}</h2></div><p><strong>{detail.customer.name}</strong><br/>{detail.customer.phone}{detail.customer.email?<><br/>{detail.customer.email}</>:null}</p><dl>{Object.entries(detail.requirements).map(([name,value])=><div key={name}><dt>{name.replace(/([A-Z])/g," $1")}</dt><dd>{String(value||"-")}</dd></div>)}</dl>{detail.items.length>0&&<div><strong>Selected dishes</strong><ul>{detail.items.map(item=><li key={item.id}>{item.name} ({item.portion}) - {money(item.price)}</li>)}</ul></div>}<div><button onClick={()=>window.admin.enquiries.copyReference(detail.id).then(()=>notify("Reference copied."))}>Copy reference</button><button onClick={()=>window.admin.enquiries.call(detail.id)}>Call customer</button><button className="primary" onClick={()=>window.admin.enquiries.openWhatsApp(detail.id)}>Open WhatsApp</button><button onClick={close}>Close</button></div></section></div>}
