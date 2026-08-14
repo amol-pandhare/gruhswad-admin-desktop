@@ -117,4 +117,4 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - Production publishing needs a dedicated Neon URL entered through Settings.
 - WhatsApp ingestion needs a deployed webhook, Meta Business credentials, and a matching inbox API token.
 - Cloud order status pushes call Neon's `gruhswad_transition_order`; do not restore direct order/event writes or send customer notifications from Electron.
-- Current 0.3.2 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
+- Current 0.3.3 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
