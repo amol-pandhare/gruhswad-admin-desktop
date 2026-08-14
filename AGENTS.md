@@ -34,6 +34,10 @@
 ## Data and behavior rules
 
 - Neon is authoritative for web orders and synchronized Gruhswad business data. SQLite is the durable offline cache and remains authoritative for desktop-only finance records.
+- Website enquiries remain authoritative in Neon. The desktop uses a read-only `(created_at,id)` cursor poll for native alerts and stores only its notification cursor/preference locally. Every new-row poll emits a renderer arrival event so the badge and filtered Enquiries view refresh even when native alerts are disabled or unavailable. The Enquiries section reads list/detail/event data directly and changes status only through the restricted Neon transition function; never add direct table writes or include enquiries in Sync Centre pushes.
+- Background unread-count reconciliation must classify nested Neon/Undici transport failures as temporary unavailability, return no replacement count, retain the renderer's last known badge, and retry on the normal interval. Do not hide authorization, schema, or query failures as network outages.
+- Enquiry read state is Neon-backed and independent of workflow status. Viewing or opening a notification calls only `gruhswad_mark_enquiry_seen`; it must never imply that the customer was contacted. The navigation badge counts `seen_at IS NULL`.
+- Deploy `neon-migrations/0004_enquiry_seen_state.sql` with an owner/migration credential before using Seen/Unread against a Neon branch. The desktop login inherits only `EXECUTE` through `gruhswad_desktop_sync`; never broaden it to direct enquiry updates or DDL.
 - Pull and push are separate explicit user actions. Never add automatic background push.
 - Preserve dirty records during pull, use optimistic concurrency during push, and require explicit conflict resolution.
 - Expenses, payments, manual orders, reports, and WhatsApp imports are local-only and must never enter a Neon push.
@@ -50,11 +54,15 @@
 - Catalog cloud images use `menu-items/{item-id}.{ext}` and stable filename-only `image_asset` values. Never allow renderer-supplied bucket names, object paths, or arbitrary local paths.
 - Menu image publication uses verified persisted export metadata and stable `menus/` object names. Upload pages before manifests, reject modified or stale local exports, and never delete outside the controlled master/one-day prefixes.
 - Before restoring a backup, decrypt it, run SQLite integrity validation, and verify the migration table. Apply a valid staged restore only on restart.
+- Resolve the fixed Production or Intensive-testing local-data profile before opening SQLite. Switching profiles requires relaunch; never hot-swap an open database or accept arbitrary database paths.
+- Refresh the test database only through SQLite's online backup API, validate integrity and migration history before promotion, and preserve the prior test copy. Keep secrets, caches, WAL/SHM files, and restore staging profile-local.
 - Publish only available, web-compatible item IDs. The featured item must belong to the selected set, and duplicate IDs are invalid.
 - Keep landing announcements in the separate `announcement` app-settings key as `{ maxAnnouncements, items }`. Normalize the admin limit to 1-6 (default 6), preserve ordered stable IDs and themes, force overflow items disabled, and match the web text, HTTPS link, and schedule validation. Legacy single-object payloads normalize to one-item collections.
 - Preserve publication backward compatibility: missing `mode` and `weeklyStartDate` normalize to one-day mode. One-day customer dates are derived as tomorrow in `Asia/Kolkata`; weekly output uses the rolling seven-day window beginning tomorrow.
 - Preserve the same-day Operations preorder-window contract as `HH:mm` India-time start/end values with the end strictly later than the start. Legacy Operations records normalize to `00:00`-`21:00`.
 - Preserve the nullable Operations `closurePeriod` contract as valid `YYYY-MM-DD` India-calendar start/end dates with an inclusive, non-reversed range. A one-day closure stores equal dates and legacy records normalize to `null`.
+- Preserve the Operations `maxPartyBulkGuests` contract as an integer from 1-500 with a legacy default of 25. It is synchronized through the existing Operations app-setting and is authoritative for Party/Bulk web enquiry capacity; it does not govern Tiffin.
+- Preserve the private `notification` app-setting as `{ backupEmail }`. It is an Operations sync record but must not be merged into public runtime configuration. Blank disables backup mail; validate and normalize nonblank addresses before marking the setting dirty.
 - The explicit closure clear action must set `closurePeriod: null` and restore `open: true`. It saves locally and becomes customer-visible only after the existing explicit Sync Centre push; never add an automatic push.
 - Preserve `src/renderer/public/alpha-initiatives-credit.png` byte-for-byte from the read-only web source asset. Keep it at the bottom-left of the desktop sidebar with accessible button text and its original aspect ratio.
 - Use separate least-privilege Neon roles: a desktop sync role restricted to synchronized Gruhswad tables, and a webhook role restricted to `whatsapp_inbox`. Never use an owner credential.
@@ -109,4 +117,4 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - Production publishing needs a dedicated Neon URL entered through Settings.
 - WhatsApp ingestion needs a deployed webhook, Meta Business credentials, and a matching inbox API token.
 - Cloud order status pushes call Neon's `gruhswad_transition_order`; do not restore direct order/event writes or send customer notifications from Electron.
-- Current 0.3.0 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
+- Current 0.3.1 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.

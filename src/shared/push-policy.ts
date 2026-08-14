@@ -10,7 +10,7 @@ export const pushSectionLabels: Record<PushSectionKey, string> = {
   operations: "Operations",
 };
 
-const operationSettingKeys = new Set(["site", "operations", "announcement", "service_area", "ordering_platforms", "public_location"]);
+const operationSettingKeys = new Set(["site", "operations", "notification", "announcement", "service_area", "ordering_platforms", "public_location"]);
 
 export type PushCandidate = { type: string; id: string };
 export type ClassifiedPushCandidate = PushCandidate & { section: PushSectionKey | null };
