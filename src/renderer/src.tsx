@@ -42,9 +42,9 @@ function App() {
   useEffect(() => window.admin.sync.onStartupPullComplete(() => setDataVersion((value) => value + 1)), []);
   useEffect(() => {const started=Date.now();const finish=()=>setTimeout(()=>setStartupLoading(false),Math.max(0,700-(Date.now()-started)));const unsubscribe=window.admin.sync.onStartupPullSettled(finish);const safety=setTimeout(()=>setStartupLoading(false),8000);return()=>{unsubscribe();clearTimeout(safety);};}, []);
   useEffect(() => window.admin.sync.onNavigateToSync(() => setPage("sync")), []);
-  const refreshEnquiryCount=()=>window.admin.enquiries.count().then(setNewEnquiries).catch(()=>setNewEnquiries(0));
+  const refreshEnquiryCount=()=>window.admin.enquiries.count().then(value=>{if(value!==null)setNewEnquiries(value)}).catch(()=>undefined);
   useEffect(()=>{void refreshEnquiryCount();const timer=setInterval(refreshEnquiryCount,60_000);return()=>clearInterval(timer)},[]);
-  useEffect(()=>window.admin.enquiries.onArrived(event=>{void window.admin.enquiries.count().then(setNewEnquiries).catch(()=>undefined);setEnquiryDataVersion(value=>value+1);setEnquiry(current=>{if(current&&event.items.some(item=>item.id===current.id))void window.admin.enquiries.detail(current.id).then(value=>setEnquiry(latest=>value&&latest?.id===current.id?value:latest));return current});const fallback=enquiryArrivalFallback(event);if(fallback)setNotice(fallback)}),[]);
+  useEffect(()=>window.admin.enquiries.onArrived(event=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1);setEnquiry(current=>{if(current&&event.items.some(item=>item.id===current.id))void window.admin.enquiries.detail(current.id).then(value=>setEnquiry(latest=>value&&latest?.id===current.id?value:latest));return current});const fallback=enquiryArrivalFallback(event);if(fallback)setNotice(fallback)}),[]);
   useEffect(()=>window.admin.enquiries.onOpen(detail=>{setPage("enquiries");setEnquiry(detail);void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}),[]);
   useEffect(()=>{window.admin.settings.get().then(value=>setLocalProfile(value.localProfiles))},[]);
   const title = pageTitles[page];
