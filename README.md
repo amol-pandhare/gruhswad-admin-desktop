@@ -9,14 +9,18 @@ Current release: **0.3.3**. The application includes Overview, cloud Orders, Cat
 ## Current behavior
 
 - **Overview** combines online and local manual orders for revenue, order counts, open value, averages, and recent activity. Unresolved conflicts produce a prominent Sync Centre CTA.
-- **Orders** has All, Online, and Manual views under one section. Online orders remain Neon-backed; structured manual orders, custom lines, statuses, and payments stay local-only. Shared service-date and source filters apply across the views.
+- **Orders** has All, Online, and Manual views under one section. Manual creation explicitly supports General, Party, and Bulk services, structured event requirements, existing or new customers, custom lines, inventory recipes, and confirmed service timing. Online orders remain Neon-backed while local services stay local-only.
 - **Enquiries** searches and filters Party, Bulk, and Tiffin requests, shows complete captured customer/requirement/item snapshots and event history, opens trusted contact actions, and changes status through Neon's restricted transition function.
+- **Enquiry conversion** creates one reviewed, confirmed local Party/Bulk order or Tiffin plan and records only its reference in Neon. Pending Neon updates remain retryable without duplicating the local service.
+- **Inventory, Recipes, and Tiffin plans** track weighted-average stock, linked purchase expenses, reservations/consumption, recipe versions and optional YouTube preparation videos, plus explicit weekly/monthly Tiffin cycles. New Tiffin plans may select or create a customer, and plan financials aggregate the ledgers of their generated cycles.
 - **Customers** combines pulled Neon profiles with locally created profiles, supports email, archive/restore, WhatsApp/email shortcuts, and prefilled manual-order creation. Customer changes synchronize only through the explicit Sync Centre push.
 - **Catalog** supports add/edit/archive/restore for items, category add/rename/reorder/activate/deactivate, web-compatibility control, bundles, and a visual food-image picker. Catalog Preview is an admin presentation mode that hides editing controls and empty categories; it is not a faithful public-site preview.
 - **Publish menu** saves either a one-day or weekly publication locally, supports one optional Today's Special, clears builder selections, exports compact and photo PDFs, previews and exports template PNGs, and shares dish names and prices through WhatsApp. One-day dates resolve to tomorrow in India; weekly output displays a rolling seven-day window. All exports use the latest locally saved publication.
 - **Operations** uses accordion sections for runtime brand, contact, ordering, fulfilment, Party/Bulk guest capacity, private backup-email recipient, service area, platforms, public location, an ordered themed announcement collection, the same-day preorder window, and optional India-calendar closures.
 - **Sync Centre** previews pulls and pushes, resolves conflicts, keeps audit history, and publishes verified menu images to Google Cloud Storage.
 - **Settings** manages encrypted connection secrets and GCS credentials, backups, restore, and application updates.
+- **Portable backup** exports both local-data profiles, their complete SQLite settings and operational data, profile selection, managed Neon environment values, credentials, and retained receipt attachments into one password-encrypted `.gswportable` file. Import validates and stages the complete replacement, preserves timestamped safety copies, and applies it only after relaunch.
+- **Receipt-assisted expenses** read JPG, PNG, WebP, and PDF invoices locally with bundled OCR. Extracted fields remain an editable draft; the reviewed invoice can optionally map individual lines to inventory receipts without creating duplicate expenses.
 
 Closing the application with unresolved conflicts or pushable dirty records opens a native warning. **Go to Sync Centre** keeps the app open and navigates there; **Exit Anyway** preserves the pending state and closes the app.
 
@@ -47,7 +51,7 @@ Packaged applications load append-only migrations from `resources/drizzle`. Elec
 
 Use separate least-privilege roles. Restrict the desktop sync role to the synchronized catalog, settings, publication, customer, address, order, line, and event tables, plus read-only enquiry/event access and execution of the enquiry transition function. Keep the webhook role restricted to `whatsapp_inbox`. Never use a Neon owner credential in the application.
 
-Apply `neon-migrations/0002_enquiry_read_access.sql`, `neon-migrations/0003_desktop_sync_role.sql`, and `neon-migrations/0004_enquiry_seen_state.sql` as the Neon owner or migration role. Migration `0004` adds `enquiries.seen_at` and grants the group role execution of `gruhswad_mark_enquiry_seen(uuid)`. The application connection must use the dedicated login role that is a member of `gruhswad_desktop_sync`; do not place an owner URL in Settings or `.env`. Apply the migrations separately to every Neon branch used by the app because roles, passwords, and branch schema state must be verified for the target endpoint.
+Apply `neon-migrations/0002_enquiry_read_access.sql` through `neon-migrations/0005_enquiry_conversion.sql` as the Neon owner or migration role. Migration `0004` adds Seen/Unread and `0005` adds idempotent conversion metadata plus `gruhswad_convert_enquiry(uuid,text)`. The application connection must use the dedicated login role that is a member of `gruhswad_desktop_sync`; do not place an owner URL in Settings or `.env`. Apply the migrations separately to every Neon branch used by the app.
 
 ## Offline synchronization
 
@@ -62,7 +66,7 @@ Apply `neon-migrations/0002_enquiry_read_access.sql`, `neon-migrations/0003_desk
 - Dashboard conflict alerts and the safe-exit warning use a fast local-only attention check and do not depend on Neon connectivity.
 - Landing announcements synchronize together as `{ maxAnnouncements, items }` in the `announcement` app-setting record. The admin limit is 1-6 (default 6); overflow items remain stored but disabled, and each ordered item supports a theme, optional schedule, and paired HTTPS CTA.
 - Scheduled operations closures are synchronized inside the existing `operations` app-setting record. A one-day closure stores equal start/end dates; ranges are inclusive. Clearing restores `open: true` locally and still requires the normal Sync Centre push to reach the storefront.
-- Party/Bulk enquiry capacity is stored as `maxPartyBulkGuests` in the same Operations app-setting (1-500, default 25 for legacy records). Save locally and push Operations from Sync Centre before the storefront uses a change.
+- Party/Bulk standard capacity is stored as `maxPartyBulkGuests` in the Operations app-setting (1-500, default 25). The storefront accepts enquiries up to three times this value and shows a feasibility warning above the standard threshold. Save locally and push Operations from Sync Centre before the storefront uses a change.
 - The enquiry poll refreshes the badge and visible Enquiries list immediately when Neon returns new rows. Native alerts can be enabled and tested in Settings; if Windows blocks or does not support them, the running app shows an in-app fallback while continuing cursor advancement.
 - The 60-second unread-count reconciliation treats Neon HTTPS timeouts and connection resets as temporary unavailability. It preserves the last known badge and retries later instead of rejecting the IPC handler or displaying a false zero; schema and permission errors still surface for correction.
 - Enquiry unread state is separate from workflow status. Opening an enquiry marks it seen through the restricted Neon function, immediately updates the unread badge, and leaves `new`, `contacted`, `quoted`, `converted`, or `closed` unchanged.
@@ -78,7 +82,11 @@ Only the structured message generated by the Gruhswad order page is converted in
 
 ## Backups and reports
 
-Backups are encrypted with Electron `safeStorage`, making them intentionally tied to the same operating-system account. The Orders CSV and dashboard combine online and local manual orders without merging their identities; each CSV row declares its record type and source. Reports use the selected service-date range. Restored databases are validated and applied on the next launch.
+Backups are encrypted with Electron `safeStorage`, making them intentionally tied to the same operating-system account. Reports keep service-period billed value separate from transaction-period receipts, refunds, expenses, and cash profit. Ingredient cost and operational margin are separate from cash profit, and Tiffin services enter reports through generated cycle orders only. Restored databases are validated and applied on the next launch.
+
+Use **Quick local backup** for a same-Windows-account database recovery. Use **Export complete portable backup** when moving the admin to another computer. Portable bundles require a password of at least 10 characters, use scrypt plus AES-256-GCM, and cannot be recovered if the password is forgotten. Credentials are plaintext only in memory while the encrypted bundle is assembled and are re-encrypted with the destination machine's `safeStorage` during import. Import does not trigger a Neon pull or push.
+
+Receipt OCR is fully local and bundles its English language data. Files are limited to 20 MB and PDFs to five pages. The original document, OCR text, extracted draft, reviewed values, and SHA-256 hash remain profile-local under `receipts/` and travel with portable backups. Duplicate hashes require an explicit override reason. Inventory mappings are committed in the same SQLite transaction as the reviewed expense.
 
 ## Customer directory migration
 
