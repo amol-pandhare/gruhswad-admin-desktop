@@ -40,6 +40,7 @@ jobs:
       - uses: actions/setup-node@v6
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm native:electron
       - run: pnpm icons:win
       - run: pnpm build
       - run: pnpm exec electron-builder --win nsis --publish never
@@ -64,6 +65,7 @@ jobs:
       - uses: actions/setup-node@v6
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm native:electron
       - run: bash scripts/generate-mac-icon.sh
       - run: pnpm build
       - run: pnpm exec electron-builder --mac dmg zip --publish never

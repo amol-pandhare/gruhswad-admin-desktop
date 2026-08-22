@@ -1,6 +1,6 @@
 {
   "name": "gruhswad-admin-desktop",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
@@ -12,9 +12,10 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "release:verify-tag": "node scripts/verify-release-tag.mjs",
+    "native:electron": "electron-rebuild -f -w better-sqlite3",
     "icons:win": "node scripts/generate-windows-icon.mjs",
-    "pack": "pnpm icons:win && pnpm build && electron-builder --dir",
-    "dist": "pnpm icons:win && pnpm build && electron-builder"
+    "pack": "pnpm native:electron && pnpm icons:win && pnpm build && electron-builder --dir",
+    "dist": "pnpm native:electron && pnpm icons:win && pnpm build && electron-builder"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
@@ -33,6 +34,7 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.3.0",
     "@types/qrcode": "^1.5.6",
@@ -47,6 +49,7 @@
     "vitest": "^3.2.4"
   },
   "build": {
+    "npmRebuild": false,
     "appId": "in.gruhswad.admin",
     "productName": "Gruhswad Admin",
     "directories": {
