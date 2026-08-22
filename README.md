@@ -4,7 +4,7 @@ Independent Gruhswad kitchen operations app. Neon is the primary source for web 
 
 While running, the app checks Neon every 60 seconds for newly persisted website enquiries. The first run establishes a baseline; later starts catch up missed rows, refresh the Enquiries badge/list, and show deduplicated native notifications.
 
-Current release: **0.3.3**. The application includes Overview, cloud Orders, Catalog, One-day menu, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
+Current release: **0.4.0**. The application includes Overview, cloud and local service Orders, Tiffin plans, Inventory, Recipes, Customers, Catalog, menu publishing, Operations, Expenses, Reports, Sync Centre, and Settings. The WhatsApp Business inbox backend remains present, but its renderer shortcut is currently disabled and marked **Coming soon**.
 
 ## Current behavior
 
@@ -137,9 +137,11 @@ $env:APP_ENV="prod"
 pnpm.cmd dist
 ```
 
-Artifacts are written to `release/`, including `Gruhswad-Admin-Setup-0.3.3.exe`, its block map, `latest.yml`, and `win-unpacked`. Windows SmartScreen may warn because version 0.3.3 is unsigned.
+Artifacts are written to `release/`, including `Gruhswad-Admin-Setup-0.4.0.exe`, its block map, `latest.yml`, and `win-unpacked`. Windows SmartScreen may warn because version 0.4.0 is unsigned.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`; merging a pull request alone intentionally does not publish a release. The tag must exactly match the package version (`0.3.3` uses `v0.3.3`) and point to the reviewed commit on `master`.
+Pushing a `v*` tag runs `.github/workflows/release.yml`; merging a pull request alone intentionally does not publish a release. The tag must exactly match the package version (`0.4.0` uses `v0.4.0`) and point to the reviewed commit on `master`.
+
+Packaging explicitly runs `pnpm native:electron` before Electron Builder so `better-sqlite3` targets Electron's Node ABI. Electron Builder's implicit native rebuild is disabled; do not remove the explicit rebuild from local packaging or either platform workflow.
 
 The workflow is a gated sequence:
 
@@ -161,14 +163,14 @@ pnpm.cmd typecheck
 pnpm.cmd --filter @gruhswad/whatsapp-webhook typecheck
 $env:APP_ENV="prod"
 pnpm.cmd build
-pnpm.cmd release:verify-tag -- v0.3.3
+pnpm.cmd release:verify-tag -- v0.4.0
 $env:CSC_IDENTITY_AUTO_DISCOVERY="false"
 pnpm.cmd exec electron-builder --win nsis --publish never
 ```
 
 Inspect the installer, blockmap, and `latest.yml`, then smoke-test `release/win-unpacked/Gruhswad Admin.exe` with `ELECTRON_RUN_AS_NODE` unset and isolated `GRUHSWAD_TEST_USER_DATA`. After the reviewed version change is merged, update `master`, create an annotated matching tag, push only that tag, monitor all four workflow jobs, and verify the final GitHub Release assets. Do not move or reuse a published tag; issue a new patch version for release defects.
 
-The published 0.3.3 release is available at <https://github.com/amol-pandhare/gruhswad-admin-desktop/releases/tag/v0.3.3>.
+The published 0.4.0 release is available at <https://github.com/amol-pandhare/gruhswad-admin-desktop/releases/tag/v0.4.0>.
 
 ## Commands
 

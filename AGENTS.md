@@ -30,6 +30,7 @@
 - Keep external navigation allowlisted in the trusted main process. The Alpha Initiatives credit must use the fixed `external:open-alpha-initiatives` action; do not replace it with a renderer-controlled URL or a generic `openExternal` bridge.
 - Keep renderer source encoding-safe. Prefer ordinary ASCII punctuation for UI separators and labels; use Unicode escapes in parsers where exact code points matter. Scan for mojibake sequences after editing user-facing strings.
 - `better-sqlite3` is native. After changing Electron, Node, architecture, or dependencies, run `pnpm exec electron-builder install-app-deps` before runtime testing.
+- Release packaging must run `pnpm native:electron` before Electron Builder. The builder configuration intentionally disables its implicit native rebuild because pnpm layouts can leave the Node ABI binary in packaged output.
 
 ## Data and behavior rules
 
@@ -125,4 +126,4 @@ If the pnpm launcher cannot access the registry but dependencies are already ins
 - Production publishing needs a dedicated Neon URL entered through Settings.
 - WhatsApp ingestion needs a deployed webhook, Meta Business credentials, and a matching inbox API token.
 - Cloud order status pushes call Neon's `gruhswad_transition_order`; do not restore direct order/event writes or send customer notifications from Electron.
-- Current 0.3.3 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
+- Current 0.4.0 artifacts are unsigned. Signed automatic releases require Windows and macOS certificates plus Apple notarization credentials in GitHub Actions secrets.
