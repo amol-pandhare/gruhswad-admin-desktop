@@ -39,6 +39,7 @@
 - Enquiry read state is Neon-backed and independent of workflow status. Viewing or opening a notification calls only `gruhswad_mark_enquiry_seen`; it must never imply that the customer was contacted. The navigation badge counts `seen_at IS NULL`.
 - Deploy `neon-migrations/0004_enquiry_seen_state.sql` with an owner/migration credential before using Seen/Unread against a Neon branch. The desktop login inherits only `EXECUTE` through `gruhswad_desktop_sync`; never broaden it to direct enquiry updates or DDL.
 - Pull and push are separate explicit user actions. Never add automatic background push.
+- Online preorder handoff state is read-only in Electron and separate from operational state. Operational changes remain dirty until Sync Centre calls the restricted `gruhswad_transition_order` function. Show the pending state; never restore handoff values to the editable workflow.
 - Preserve dirty records during pull, use optimistic concurrency during push, and require explicit conflict resolution.
 - Expenses, payments, manual orders, reports, and WhatsApp imports are local-only and must never enter a Neon push.
 - Customer profiles are synchronized independently from local manual orders. Recording a manual order may create or update a dirty `cloud_customer`, but must never make the order, its lines, or its payments pushable.
@@ -49,7 +50,9 @@
 - Validate renderer input at IPC boundaries with Zod even if the form already validates it.
 - Cash-basis revenue includes received payments minus refunds. Profit is cash revenue minus expenses recorded within the selected period.
 - Unified local payments may reference mirrored online or local service orders. Completion never implies payment; revenue uses payment occurrence dates.
+- Customer milestone outreach is available only for confirmed, ready, and cancelled orders. Resolve the order and phone in the main process, open a versioned prefilled WhatsApp message, and record only `whatsapp_opened` locally. Never infer sent, delivered, or contacted, and never synchronize contact audit events.
 - Inventory, recipes, purchases, reservations, Tiffin plans, and generated cycles are profile-local and never pushed. Reserve recipe snapshots on confirmation, consume on preparation, require an audited shortage override, and correct stock through ledger entries rather than deleting history.
+- Enquiry conversion quantity defaults use the largest positive whole number captured in guest count, people count, or quantity expectations. Apply it to every selected Party/Bulk line. Tiffin plans preserve people and quantity notes separately, then use their larger numeric value when generating cycle quantities before multiplying by eligible days and meal slots.
 - Recipe videos store validated YouTube IDs only. In-app playback uses the privacy-enhanced embed origin and external opening resolves a canonical URL in the trusted main process.
 - Structured WhatsApp messages create draft orders. Use Meta message IDs and the `whatsapp_imports` unique constraint to prevent duplicates; unmatched text stays visible for manual handling.
 - Store connection secrets with Electron `safeStorage`. Do not return decrypted secrets to the renderer. Preserve previously stored secrets when a settings field is left blank.

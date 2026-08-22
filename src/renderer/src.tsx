@@ -110,13 +110,6 @@ const navGroups: Array<{
     ],
   },
   {
-    label: "Kitchen control",
-    items: [
-      ["inventory", "Inventory", "IN"],
-      ["recipes", "Recipes", "RC"],
-    ],
-  },
-  {
     label: "Customer & menu",
     items: [
       ["customers", "Customers", "CU"],
@@ -130,6 +123,13 @@ const navGroups: Array<{
       ["operations", "Operations", "OP"],
       ["expenses", "Expenses", "EX"],
       ["reports", "Reports", "RP"],
+    ],
+  },
+  {
+    label: "Kitchen control",
+    items: [
+      ["inventory", "Inventory", "IN"],
+      ["recipes", "Recipes", "RC"],
     ],
   },
 ];
@@ -599,6 +599,7 @@ function EnquiryDetailModal({
     if (updated) setCurrent(updated);
     notify("Enquiry conversion status synchronized with Neon.");
   }
+  const enquiryStatusOptions:EnquiryDetail["status"][]=current.status==="new"?["new","reviewing","closed"]:current.status==="reviewing"?["reviewing","quoted","closed"]:current.status==="contacted"?["contacted","reviewing","quoted","closed"]:current.status==="quoted"?["quoted","closed"]:[current.status];
   return (
     <>
       {converting ? (
@@ -683,14 +684,11 @@ function EnquiryDetailModal({
                     ).catch((error) => notify(error.message))
                   }
                 >
-                  {["new", "contacted", "quoted", "closed"].map((status) => (
+                  {enquiryStatusOptions.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {status === "contacted" ? "Contacted (legacy)" : status.replace("_", " ")}
                     </option>
                   ))}
-                  {current.status === "converted" && (
-                    <option value="converted">converted</option>
-                  )}
                 </select>
               </label>
             </section>
@@ -726,8 +724,9 @@ function EnquiryDetailModal({
               <button
                 onClick={() => window.admin.enquiries.openWhatsApp(current.id)}
               >
-                WhatsApp
+                WhatsApp follow-up
               </button>
+              <button onClick={() => window.admin.enquiries.openQuoteWhatsApp(current.id)}>Quotation WhatsApp</button>
               <button
                 disabled={!current.customer.email}
                 onClick={() => window.admin.enquiries.composeEmail(current.id)}
@@ -822,7 +821,7 @@ function EnquiriesPage({
           </select>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="all">All statuses</option>
-            {["new", "contacted", "quoted", "converted", "closed"].map(
+            {["new", "reviewing", "contacted", "quoted", "converted", "closed"].map(
               (value) => (
                 <option key={value}>{value}</option>
               ),
@@ -914,7 +913,7 @@ function EnquiriesPage({
                   transition(e.target.value as EnquiryDetail["status"])
                 }
               >
-                {["new", "contacted", "quoted", "converted", "closed"].map(
+                {["new", "reviewing", "contacted", "quoted", "converted", "closed"].map(
                   (value) => (
                     <option key={value}>{value}</option>
                   ),
@@ -2740,18 +2739,13 @@ function UnifiedOrdersPage({
         : "Manual order status updated locally.",
     );
   }
-  const statusOptions = (row: UnifiedOrderSummary) =>
-    row.kind === "online"
-      ? [
-          "handoff_created",
-          "customer_confirmed_sent",
-          "confirmed",
-          "preparing",
-          "ready",
-          "completed",
-          "cancelled",
-        ]
-      : ["draft", "confirmed", "preparing", "ready", "completed", "cancelled"];
+  const statusLabel=(value:string)=>({draft:"Draft",awaiting_review:"Awaiting review",confirmed:"Confirmed",preparing:"Preparing",ready:"Ready",completed:"Completed",cancelled:"Cancelled"}[value]??value);
+  const statusOptions = (row: UnifiedOrderSummary) => {
+    if(["completed","cancelled"].includes(row.status))return[row.status];
+    const sequence=row.kind==="online"?["awaiting_review","confirmed","preparing","ready","completed"]:["draft","confirmed","preparing","ready","completed"];
+    const current=Math.max(0,sequence.indexOf(row.status));
+    return[sequence[current],sequence[current+1],"cancelled"].filter((value,index,values):value is string=>Boolean(value)&&values.indexOf(value)===index);
+  };
   return (
     <>
       <div className="order-tabs" role="tablist">
@@ -2822,6 +2816,7 @@ function UnifiedOrdersPage({
                   <span>
                     {row.reference} / {row.serviceDate} / {row.sourceName}
                   </span>
+                  {row.kind==="online"&&<span>Handoff: {row.handoffStatus==="customer_confirmed"?"Customer confirmed WhatsApp":"WhatsApp handoff created"}{row.pendingSync?" / Pending Sync Centre":""}</span>}
                 </div>
                 <b>{money(row.total)}</b>
                 <select
@@ -2829,7 +2824,7 @@ function UnifiedOrdersPage({
                   onChange={(event) => setStatus(row, event.target.value)}
                 >
                   {statusOptions(row).map((value) => (
-                    <option key={value}>{value}</option>
+                    <option key={value} value={value}>{statusLabel(value)}</option>
                   ))}
                 </select>
                 <button onClick={() => select(row)}>View</button>
@@ -2843,6 +2838,7 @@ function UnifiedOrdersPage({
             <div className="detail-card">
               <span className={`order-kind ${detail.kind}`}>{detail.kind}</span>
               <b>{detail.reference}</b>
+              {detail.kind==="online"&&<span className="order-handoff-state">Handoff: {detail.handoffStatus==="customer_confirmed"?"Customer confirmed WhatsApp":"WhatsApp handoff created"}{detail.pendingSync?" / Operational status pending Sync Centre":""}</span>}
               <span>
                 {detail.customerName} / {detail.phone}
                 {detail.email ? ` / ${detail.email}` : ""}
@@ -2875,6 +2871,7 @@ function UnifiedOrdersPage({
                 <div className="ledger-list">{detail.payments.map((payment:any)=><span key={payment.id}><b>{payment.direction === "refunded" ? "Refund" : "Receipt"} {money(payment.amount)}</b> / {new Date(payment.occurred_at).toLocaleString()} / {payment.method}{payment.notes ? ` / ${payment.notes}` : ""}</span>)}{!detail.payments.length&&<small>No payment entries yet.</small>}</div>
               </section>
               <div className="detail-actions">
+                {["confirmed","ready","cancelled"].includes(detail.status)&&<button className="button button-primary" onClick={()=>window.admin.orders.openWhatsApp(detail.kind,detail.id).then(async()=>{setDetail(await window.admin.orders.detail(detail.kind,detail.id));notify("WhatsApp opened. Delivery is not confirmed.");}).catch(error=>notify(error.message))}>Open {statusLabel(detail.status)} WhatsApp</button>}
                 {detail.kind === "manual" && (
                   <button className="button button-outline"
                     onClick={() => {
@@ -2886,6 +2883,8 @@ function UnifiedOrdersPage({
                 <button className="button button-primary" disabled={detail.outstanding<=0} onClick={()=>setPaymentDraft({direction:"received",amount:String(detail.outstanding),method:"UPI",notes:""})}>Record receipt</button>
                 <button className="button button-outline" disabled={detail.paid-detail.refunded<=0} onClick={()=>setPaymentDraft({direction:"refunded",amount:"",method:"UPI",notes:""})}>Record refund</button>
               </div>
+              <section className="order-contact-history"><h3>Customer contact</h3>{detail.contactEvents.map(event=><span key={event.id}>WhatsApp opened for {statusLabel(event.milestone)} / {new Date(event.openedAt).toLocaleString()}</span>)}{!detail.contactEvents.length&&<small>No customer milestone message has been opened.</small>}</section>
+              <section className="order-contact-history"><h3>Status history</h3>{detail.statusEvents.map(event=><span key={event.id}>{statusLabel(event.previousStatus)} to {statusLabel(event.nextStatus)} / {new Date(event.changedAt).toLocaleString()}</span>)}{!detail.statusEvents.length&&<small>No local operational status changes yet.</small>}</section>
             </div>
           ) : (
             <Empty text="Select an order to inspect it." />
