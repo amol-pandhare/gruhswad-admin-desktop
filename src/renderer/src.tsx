@@ -1,54 +1,272 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { CatalogCategory, CatalogImageSaveSelection, CatalogItem, CustomerInput, CustomerSummary, Dashboard, DateRange, EnquiryDetail, LocalDataProfileState, MenuImagePublicationStatus, OrderingSource, Publication, PushPreview, RuntimeConfig, SyncAttentionStatus, SyncPreview, SyncStatus, UnifiedOrderDetail, UnifiedOrderSummary } from "../shared/contracts";
-import { isPublishableItem, sanitizePublication, searchableCatalogItem } from "../shared/catalog";
+import type {
+  CatalogCategory,
+  CatalogImageSaveSelection,
+  CatalogItem,
+  CustomerInput,
+  CustomerSummary,
+  Dashboard,
+  DateRange,
+  EnquiryDetail,
+  LocalDataProfileState,
+  MenuImagePublicationStatus,
+  OrderingSource,
+  Publication,
+  PushPreview,
+  RuntimeConfig,
+  SyncAttentionStatus,
+  SyncPreview,
+  SyncStatus,
+  UnifiedOrderDetail,
+  UnifiedOrderSummary,
+} from "../shared/contracts";
+import {
+  isPublishableItem,
+  sanitizePublication,
+  searchableCatalogItem,
+} from "../shared/catalog";
 import { CatalogEditorModal } from "./CatalogEditorModal";
 import { CategoryManagerModal } from "./CategoryManagerModal";
 import { indiaToday } from "../shared/dates";
 import { enquiryArrivalFallback } from "../shared/enquiry-arrival";
+import {
+  InventoryPage,
+  RecipesPage,
+  TiffinPlansPage,
+} from "./OperationalPages";
+import { EnquiryConversion } from "./EnquiryConversion";
 import "./styles.css";
 
-type Page = "dashboard" | "enquiries" | "orders" | "customers" | "catalog" | "menu" | "operations" | "expenses" | "reports" | "inbox" | "sync" | "settings";
-const money = (value: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value || 0);
-const indiaDateTime = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Kolkata" });
-function displayValue(key:string,value:unknown){if(value==null)return "-";if(/(?:^|_)(?:started|completed|created|updated|published|received)_at$/.test(key)&&typeof value==="string"){const date=new Date(value);if(!Number.isNaN(date.getTime()))return `${indiaDateTime.format(date)} IST`;}return String(value);}
+type Page =
+  | "dashboard"
+  | "enquiries"
+  | "orders"
+  | "tiffin"
+  | "inventory"
+  | "recipes"
+  | "customers"
+  | "catalog"
+  | "menu"
+  | "operations"
+  | "expenses"
+  | "reports"
+  | "inbox"
+  | "sync"
+  | "settings";
+const money = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+const indiaDateTime = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZone: "Asia/Kolkata",
+});
+function displayValue(key: string, value: unknown) {
+  if (value == null) return "-";
+  if (
+    /(?:^|_)(?:started|completed|created|updated|published|received)_at$/.test(
+      key,
+    ) &&
+    typeof value === "string"
+  ) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime()))
+      return `${indiaDateTime.format(date)} IST`;
+  }
+  return String(value);
+}
 const today = () => indiaToday();
 const monthRange = (): DateRange => {
   const date = new Date();
-  return { from: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`, to: today() };
+  return {
+    from: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`,
+    to: today(),
+  };
 };
-const nav: [Page, string, string][] = [
-  ["dashboard", "Overview", "OV"], ["enquiries", "Enquiries", "EN"], ["orders", "Orders", "OR"], ["customers","Customers","CU"],
-  ["catalog", "Catalog", "CA"], ["menu", "Publish menu", "MN"], ["operations", "Operations", "OP"],
-  ["expenses", "Expenses", "EX"], ["reports", "Reports", "RP"],
+const navGroups: Array<{
+  label: string;
+  items: [Page, string, string][];
+}> = [
+  {
+    label: "Monitor",
+    items: [
+      ["dashboard", "Overview", "OV"],
+      ["enquiries", "Enquiries", "EN"],
+    ],
+  },
+  {
+    label: "Service delivery",
+    items: [
+      ["orders", "Orders", "OR"],
+      ["tiffin", "Tiffin plans", "TF"],
+    ],
+  },
+  {
+    label: "Customer & menu",
+    items: [
+      ["customers", "Customers", "CU"],
+      ["catalog", "Catalog", "CA"],
+      ["menu", "Publish menu", "MN"],
+    ],
+  },
+  {
+    label: "Business",
+    items: [
+      ["operations", "Operations", "OP"],
+      ["expenses", "Expenses", "EX"],
+      ["reports", "Reports", "RP"],
+    ],
+  },
+  {
+    label: "Kitchen control",
+    items: [
+      ["inventory", "Inventory", "IN"],
+      ["recipes", "Recipes", "RC"],
+    ],
+  },
 ];
-const pageTitles:Record<Page,string>={dashboard:"Overview",enquiries:"Enquiries",orders:"Orders",customers:"Customers",catalog:"Catalog",menu:"Publish menu",operations:"Operations",expenses:"Expenses",reports:"Reports",inbox:"WhatsApp inbox",sync:"Sync Centre",settings:"Settings"};
+const pageTitles: Record<Page, string> = {
+  dashboard: "Overview",
+  enquiries: "Enquiries",
+  orders: "Orders",
+  tiffin: "Tiffin plans",
+  inventory: "Inventory",
+  recipes: "Recipes",
+  customers: "Customers",
+  catalog: "Catalog",
+  menu: "Publish menu",
+  operations: "Operations",
+  expenses: "Expenses",
+  reports: "Reports",
+  inbox: "WhatsApp inbox",
+  sync: "Sync Centre",
+  settings: "Settings",
+};
 
 type ToastTone = "success" | "error" | "info";
 type ToastMessage = { id: number; message: string; tone: ToastTone };
 let nextToastId = 0;
 
 function toastTone(message: string): ToastTone {
-  if (/\b(error|failed|failure|could not|unable|invalid|missing|rejected|unavailable|not configured)\b/i.test(message)) return "error";
-  if (/\b(saved|updated|complete|completed|generated|exported|copied|recorded|published|resolved|restored|created|imported|sent|opened|success)\b/i.test(message)) return "success";
-  if (/\b(cancelled|canceled|temporarily disabled|new enquir(?:y|ies)|already published|notice|warning)\b/i.test(message)) return "info";
+  if (
+    /\b(error|failed|failure|could not|unable|invalid|missing|rejected|unavailable|not configured)\b/i.test(
+      message,
+    )
+  )
+    return "error";
+  if (
+    /\b(saved|updated|complete|completed|generated|exported|copied|recorded|published|resolved|restored|created|imported|sent|opened|success)\b/i.test(
+      message,
+    )
+  )
+    return "success";
+  if (
+    /\b(cancelled|canceled|temporarily disabled|new enquir(?:y|ies)|already published|notice|warning)\b/i.test(
+      message,
+    )
+  )
+    return "info";
   return "error";
 }
 
-function ToastItem({ toast, dismiss }: { toast: ToastMessage; dismiss(id: number): void }) {
+function ToastItem({
+  toast,
+  dismiss,
+}: {
+  toast: ToastMessage;
+  dismiss(id: number): void;
+}) {
   useEffect(() => {
-    const timer = window.setTimeout(() => dismiss(toast.id), toast.tone === "error" ? 9000 : 6000);
+    const timer = window.setTimeout(
+      () => dismiss(toast.id),
+      toast.tone === "error" ? 9000 : 6000,
+    );
     return () => window.clearTimeout(timer);
   }, [dismiss, toast.id, toast.tone]);
-  const title = toast.tone === "error" ? "Action needs attention" : toast.tone === "success" ? "Success" : "Notice";
-  return <div className={`toast ${toast.tone}`} role={toast.tone === "error" ? "alert" : "status"}><span className="toast-mark" aria-hidden="true">{toast.tone === "error" ? "!" : toast.tone === "success" ? "\u2713" : "i"}</span><div><strong>{title}</strong><p>{toast.message}</p></div><button type="button" aria-label={`Dismiss ${title.toLowerCase()}`} onClick={() => dismiss(toast.id)}>{"\u00d7"}</button></div>;
+  const title =
+    toast.tone === "error"
+      ? "Action needs attention"
+      : toast.tone === "success"
+        ? "Success"
+        : "Notice";
+  return (
+    <div
+      className={`toast ${toast.tone}`}
+      role={toast.tone === "error" ? "alert" : "status"}
+    >
+      <span className="toast-mark" aria-hidden="true">
+        {toast.tone === "error"
+          ? "!"
+          : toast.tone === "success"
+            ? "\u2713"
+            : "i"}
+      </span>
+      <div>
+        <strong>{title}</strong>
+        <p>{toast.message}</p>
+      </div>
+      <button
+        type="button"
+        aria-label={`Dismiss ${title.toLowerCase()}`}
+        onClick={() => dismiss(toast.id)}
+      >
+        {"\u00d7"}
+      </button>
+    </div>
+  );
 }
 
-function ToastRegion({ toasts, dismiss }: { toasts: ToastMessage[]; dismiss(id: number): void }) {
-  return <div className="toast-region" aria-label="Application notifications">{toasts.map((toast) => <ToastItem toast={toast} dismiss={dismiss} key={toast.id} />)}</div>;
+function ToastRegion({
+  toasts,
+  dismiss,
+}: {
+  toasts: ToastMessage[];
+  dismiss(id: number): void;
+}) {
+  return (
+    <div className="toast-region" aria-label="Application notifications">
+      {toasts.map((toast) => (
+        <ToastItem toast={toast} dismiss={dismiss} key={toast.id} />
+      ))}
+    </div>
+  );
 }
 
-function UtilityIcon({name}:{name:"settings"|"sync"|"whatsapp"}){const paths={settings:<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,sync:<><path d="M20 7h-6V1"/><path d="m20 1-6 6a8 8 0 1 0 2.3 8.7"/></>,whatsapp:<><path d="M20 11.5a8 8 0 0 1-11.8 7L3 20l1.5-5.1A8 8 0 1 1 20 11.5Z"/><path d="M8.5 8.2c.5 3 2.3 4.8 5.3 5.3"/></>};return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;}
+function UtilityIcon({ name }: { name: "settings" | "sync" | "whatsapp" }) {
+  const paths = {
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+      </>
+    ),
+    sync: (
+      <>
+        <path d="M20 7h-6V1" />
+        <path d="m20 1-6 6a8 8 0 1 0 2.3 8.7" />
+      </>
+    ),
+    whatsapp: (
+      <>
+        <path d="M20 11.5a8 8 0 0 1-11.8 7L3 20l1.5-5.1A8 8 0 1 1 20 11.5Z" />
+        <path d="M8.5 8.2c.5 3 2.3 4.8 5.3 5.3" />
+      </>
+    ),
+  };
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {paths[name]}
+    </svg>
+  );
+}
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
@@ -57,264 +275,5599 @@ function App() {
   const [dataVersion, setDataVersion] = useState(0);
   const [startupLoading, setStartupLoading] = useState(true);
   const [imagePreviewCount, setImagePreviewCount] = useState(0);
-  const [orderTab,setOrderTab]=useState<"all"|"online"|"manual">("all");
-  const [orderCustomerId,setOrderCustomerId]=useState<string|null>(null);
-  const [enquiry,setEnquiry]=useState<EnquiryDetail|null>(null);
-  const [newEnquiries,setNewEnquiries]=useState(0);
-  const [enquiryDataVersion,setEnquiryDataVersion]=useState(0);
-  const [localProfile,setLocalProfile]=useState<LocalDataProfileState|null>(null);
-  const dismissToast = useCallback((id: number) => setToasts((current) => current.filter((toast) => toast.id !== id)), []);
+  const [orderTab, setOrderTab] = useState<"all" | "online" | "manual">("all");
+  const [orderCustomerId, setOrderCustomerId] = useState<string | null>(null);
+  const [enquiry, setEnquiry] = useState<EnquiryDetail | null>(null);
+  const [newEnquiries, setNewEnquiries] = useState<number | null>(null);
+  const [enquiryDataVersion, setEnquiryDataVersion] = useState(0);
+  const [localProfile, setLocalProfile] =
+    useState<LocalDataProfileState | null>(null);
+  const dismissToast = useCallback(
+    (id: number) =>
+      setToasts((current) => current.filter((toast) => toast.id !== id)),
+    [],
+  );
   const notify = useCallback((message: string) => {
     const normalized = message.trim();
     if (!normalized) return;
-    setToasts((current) => [...current.slice(-3), { id: ++nextToastId, message: normalized, tone: toastTone(normalized) }]);
+    setToasts((current) => [
+      ...current.slice(-3),
+      { id: ++nextToastId, message: normalized, tone: toastTone(normalized) },
+    ]);
   }, []);
-  useEffect(() => window.admin.sync.onStartupPullComplete(() => setDataVersion((value) => value + 1)), []);
-  useEffect(() => {const started=Date.now();const finish=()=>setTimeout(()=>setStartupLoading(false),Math.max(0,700-(Date.now()-started)));const unsubscribe=window.admin.sync.onStartupPullSettled(finish);const safety=setTimeout(()=>setStartupLoading(false),8000);return()=>{unsubscribe();clearTimeout(safety);};}, []);
-  useEffect(() => window.admin.sync.onNavigateToSync(() => setPage("sync")), []);
-  const refreshEnquiryCount=()=>window.admin.enquiries.count().then(value=>{if(value!==null)setNewEnquiries(value)}).catch(()=>undefined);
-  useEffect(()=>{void refreshEnquiryCount();const timer=setInterval(refreshEnquiryCount,60_000);return()=>clearInterval(timer)},[]);
-  useEffect(()=>window.admin.enquiries.onArrived(event=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1);setEnquiry(current=>{if(current&&event.items.some(item=>item.id===current.id))void window.admin.enquiries.detail(current.id).then(value=>setEnquiry(latest=>value&&latest?.id===current.id?value:latest));return current});const fallback=enquiryArrivalFallback(event);if(fallback)notify(fallback)}),[notify]);
-  useEffect(()=>window.admin.enquiries.onOpen(detail=>{setPage("enquiries");setEnquiry(detail);void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}),[]);
-  useEffect(()=>{window.admin.settings.get().then(value=>setLocalProfile(value.localProfiles))},[]);
+  useEffect(
+    () =>
+      window.admin.sync.onStartupPullComplete(() =>
+        setDataVersion((value) => value + 1),
+      ),
+    [],
+  );
+  useEffect(() => {
+    const started = Date.now();
+    const finish = () =>
+      setTimeout(
+        () => setStartupLoading(false),
+        Math.max(0, 700 - (Date.now() - started)),
+      );
+    const unsubscribe = window.admin.sync.onStartupPullSettled(finish);
+    const safety = setTimeout(() => setStartupLoading(false), 8000);
+    return () => {
+      unsubscribe();
+      clearTimeout(safety);
+    };
+  }, []);
+  useEffect(
+    () => window.admin.sync.onNavigateToSync(() => setPage("sync")),
+    [],
+  );
+  const refreshEnquiryCount = () =>
+    window.admin.enquiries
+      .count()
+      .then(setNewEnquiries)
+      .catch(() => setNewEnquiries(null));
+  useEffect(() => {
+    void refreshEnquiryCount();
+    const timer = setInterval(refreshEnquiryCount, 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(
+    () =>
+      window.admin.enquiries.onArrived((event) => {
+        void refreshEnquiryCount();
+        setEnquiryDataVersion((value) => value + 1);
+        setEnquiry((current) => {
+          if (current && event.items.some((item) => item.id === current.id))
+            void window.admin.enquiries
+              .detail(current.id)
+              .then((value) =>
+                setEnquiry((latest) =>
+                  value && latest?.id === current.id ? value : latest,
+                ),
+              );
+          return current;
+        });
+        const fallback = enquiryArrivalFallback(event);
+        if (fallback) notify(fallback);
+      }),
+    [notify],
+  );
+  useEffect(
+    () =>
+      window.admin.enquiries.onOpen((detail) => {
+        setPage("enquiries");
+        setEnquiry(detail);
+        void refreshEnquiryCount();
+        setEnquiryDataVersion((value) => value + 1);
+      }),
+    [],
+  );
+  useEffect(() => {
+    window.admin.settings
+      .get()
+      .then((value) => setLocalProfile(value.localProfiles));
+  }, []);
   const title = pageTitles[page];
-  return <>{startupLoading&&<StartupLoader/>}<div className="app-shell">
-    <aside><div className="brand"><b>G</b><div><strong>Gruhswad</strong><span>Kitchen admin</span></div></div>
-      <div className="utility-nav" aria-label="Administration shortcuts"><button className={page==="settings"?"active":""} title="Settings" aria-label="Settings" onClick={()=>setPage("settings")}><UtilityIcon name="settings"/></button><button className={page==="sync"?"active":""} title="Sync Centre" aria-label="Sync Centre" onClick={()=>setPage("sync")}><UtilityIcon name="sync"/></button><button className="disabled" title="WhatsApp Inbox - coming soon" aria-label="WhatsApp Inbox is temporarily disabled" aria-disabled="true" onClick={()=>notify("WhatsApp Inbox is temporarily disabled. We can enable it when required.")}><UtilityIcon name="whatsapp"/><span>Coming soon</span></button></div>
-      <nav>{nav.map(([id, label, icon]) => <button className={page === id ? "active" : ""} onClick={() => setPage(id)} key={id}><i>{icon}</i>{label}{id==="enquiries"&&newEnquiries>0?<span className="nav-badge">{newEnquiries}</span>:null}</button>)}</nav>
-      <div className="side-note"><span>Local-first</span><p>Your operational data stays on this computer.</p></div>
-      <div className="alpha-credit"><button type="button" aria-label="Powered by Alpha Initiatives" title="Open Alpha Initiatives" onClick={()=>window.admin.external.openAlphaInitiatives()}><img src="./alpha-initiatives-credit.png" alt=""/></button></div>
-    </aside>
-    <main><header><div><small>HOME KITCHEN OPERATIONS</small><h1>{title}</h1></div>{localProfile?.active==="intensive-testing"&&<strong className="testing-profile-badge">Intensive testing</strong>}{!(["menu", "settings", "inbox", "catalog", "operations", "orders", "customers", "sync"] as Page[]).includes(page) && <DateFilter range={range} setRange={setRange} />}</header>
-      {page === "settings" && <NotificationSetting notify={notify}/>}
-      <React.Fragment key={`${page}-${dataVersion}`}>
-        {page === "dashboard" && <DashboardPage range={range} openSync={()=>setPage("sync")} />}
-        {page === "enquiries" && <EnquiriesPage notify={notify} dataVersion={enquiryDataVersion} onViewed={()=>{void refreshEnquiryCount();setEnquiryDataVersion(value=>value+1)}} />}
-        {page === "orders" && <UnifiedOrdersPage notify={notify} initialTab={orderTab} prefillCustomerId={orderCustomerId} clearPrefill={()=>setOrderCustomerId(null)} />}
-        {page === "customers" && <CustomersPage notify={notify} newOrder={(id)=>{setOrderCustomerId(id);setOrderTab("manual");setPage("orders");}} />}
-        {page === "catalog" && <CatalogPage notify={notify} previewImages={setImagePreviewCount} />}
-        {page === "expenses" && <ExpensesPage range={range} notify={notify} />}
-        {page === "reports" && <ReportsPage range={range} notify={notify} />}
-        {page === "menu" && <MenuPage notify={notify} previewImages={setImagePreviewCount} />}
-        {page === "operations" && <OperationsPage notify={notify} />}
-        {page === "inbox" && <Panel title="WhatsApp Inbox"><Empty text="WhatsApp Inbox is temporarily disabled." /></Panel>}
-        {page === "sync" && <SyncPage notify={notify} />}
-        {page === "settings" && <SettingsPage notify={notify} />}
-      </React.Fragment>
-    </main>
-  </div><ToastRegion toasts={toasts} dismiss={dismissToast}/>{imagePreviewCount>0&&<ImagePreviewModal count={imagePreviewCount} close={()=>setImagePreviewCount(0)} notify={notify}/>} {enquiry&&<EnquiryDetailModal detail={enquiry} close={()=>setEnquiry(null)} notify={notify}/>}</>;
+  return (
+    <>
+      {startupLoading && <StartupLoader />}
+      <div className="app-shell">
+        <aside>
+          <div className="brand">
+            <b>G</b>
+            <div>
+              <strong>Gruhswad</strong>
+              <span>Kitchen admin</span>
+            </div>
+          </div>
+          <div className="utility-nav" aria-label="Administration shortcuts">
+            <button
+              className={page === "settings" ? "active" : ""}
+              title="Settings"
+              aria-label="Settings"
+              onClick={() => setPage("settings")}
+            >
+              <UtilityIcon name="settings" />
+            </button>
+            <button
+              className={page === "sync" ? "active" : ""}
+              title="Sync Centre"
+              aria-label="Sync Centre"
+              onClick={() => setPage("sync")}
+            >
+              <UtilityIcon name="sync" />
+            </button>
+            <button
+              className="disabled"
+              title="WhatsApp Inbox - coming soon"
+              aria-label="WhatsApp Inbox is temporarily disabled"
+              aria-disabled="true"
+              onClick={() =>
+                notify(
+                  "WhatsApp Inbox is temporarily disabled. We can enable it when required.",
+                )
+              }
+            >
+              <UtilityIcon name="whatsapp" />
+              <span>Coming soon</span>
+            </button>
+          </div>
+          <nav className="sidebar-menu-scroll" aria-label="Main navigation">
+            {navGroups.map((group) => (
+              <section className="sidebar-menu-group" key={group.label}>
+                <span className="sidebar-menu-heading">{group.label}</span>
+                {group.items.map(([id, label, icon]) => (
+                  <button
+                    className={page === id ? "active" : ""}
+                    onClick={() => setPage(id)}
+                    key={id}
+                  >
+                    <i>{icon}</i>
+                    {label}
+                    {id === "enquiries" && (newEnquiries ?? 0) > 0 ? (
+                      <span className="nav-badge">{newEnquiries}</span>
+                    ) : null}
+                  </button>
+                ))}
+              </section>
+            ))}
+          </nav>
+          <div className="side-note">
+            <span>Local-first</span>
+            <p>Your operational data stays on this computer.</p>
+          </div>
+          <div className="alpha-credit">
+            <button
+              type="button"
+              aria-label="Powered by Alpha Initiatives"
+              title="Open Alpha Initiatives"
+              onClick={() => window.admin.external.openAlphaInitiatives()}
+            >
+              <img src="./alpha-initiatives-credit.png" alt="" />
+            </button>
+          </div>
+        </aside>
+        <main>
+          <header>
+            <div>
+              <small>HOME KITCHEN OPERATIONS</small>
+              <h1>{title}</h1>
+            </div>
+            {localProfile?.active === "intensive-testing" && (
+              <strong className="testing-profile-badge">
+                Intensive testing
+              </strong>
+            )}
+            {!(
+              [
+                "menu",
+                "settings",
+                "inbox",
+                "catalog",
+                "operations",
+                "orders",
+                "customers",
+                "sync",
+                "enquiries",
+              ] as Page[]
+            ).includes(page) && (
+              <DateFilter range={range} setRange={setRange} />
+            )}
+          </header>
+          {page === "settings" && (
+            <>
+              <NotificationSetting notify={notify} />
+              <CredentialRepairSetting notify={notify} />
+              <PortableBackupSetting notify={notify} />
+            </>
+          )}
+          <React.Fragment key={`${page}-${dataVersion}`}>
+            {page === "dashboard" && (
+              <DashboardPage range={range} openSync={() => setPage("sync")} />
+            )}
+            {page === "enquiries" && (
+              <EnquiriesPage
+                notify={notify}
+                dataVersion={enquiryDataVersion}
+                unseenCount={newEnquiries}
+                openEnquiry={setEnquiry}
+                onViewed={() => {
+                  void refreshEnquiryCount();
+                  setEnquiryDataVersion((value) => value + 1);
+                }}
+              />
+            )}
+            {page === "orders" && (
+              <UnifiedOrdersPage
+                notify={notify}
+                initialTab={orderTab}
+                prefillCustomerId={orderCustomerId}
+                clearPrefill={() => setOrderCustomerId(null)}
+              />
+            )}
+            {page === "tiffin" && <TiffinPlansPage notify={notify} />}
+            {page === "inventory" && <InventoryPage notify={notify} />}
+            {page === "recipes" && <RecipesPage notify={notify} />}
+            {page === "customers" && (
+              <CustomersPage
+                notify={notify}
+                newOrder={(id) => {
+                  setOrderCustomerId(id);
+                  setOrderTab("manual");
+                  setPage("orders");
+                }}
+              />
+            )}
+            {page === "catalog" && (
+              <CatalogPage
+                notify={notify}
+                previewImages={setImagePreviewCount}
+              />
+            )}
+            {page === "expenses" && (
+              <ExpensesPage range={range} notify={notify} />
+            )}
+            {page === "reports" && (
+              <ReportsPage range={range} notify={notify} />
+            )}
+            {page === "menu" && (
+              <MenuPage notify={notify} previewImages={setImagePreviewCount} />
+            )}
+            {page === "operations" && <OperationsPage notify={notify} />}
+            {page === "inbox" && (
+              <Panel title="WhatsApp Inbox">
+                <Empty text="WhatsApp Inbox is temporarily disabled." />
+              </Panel>
+            )}
+            {page === "sync" && <SyncPage notify={notify} />}
+            {page === "settings" && <SettingsPage notify={notify} />}
+          </React.Fragment>
+        </main>
+      </div>
+      <ToastRegion toasts={toasts} dismiss={dismissToast} />
+      {imagePreviewCount > 0 && (
+        <ImagePreviewModal
+          count={imagePreviewCount}
+          close={() => setImagePreviewCount(0)}
+          notify={notify}
+        />
+      )}{" "}
+      {enquiry && (
+        <EnquiryDetailModal
+          detail={enquiry}
+          close={() => setEnquiry(null)}
+          notify={notify}
+        />
+      )}
+    </>
+  );
 }
 
-function EnquiryDetailModal({detail,close,notify}:{detail:EnquiryDetail;close():void;notify(message:string):void}){return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`${detail.type} enquiry ${detail.reference}`}><section className="inline-form enquiry-detail"><div><small>{detail.type.toUpperCase()} ENQUIRY</small><h2>{detail.reference}</h2></div><p><strong>{detail.customer.name}</strong><br/>{detail.customer.phone}{detail.customer.email?<><br/>{detail.customer.email}</>:null}</p><dl>{Object.entries(detail.requirements).map(([name,value])=><div key={name}><dt>{name.replace(/([A-Z])/g," $1")}</dt><dd>{String(value||"-")}</dd></div>)}</dl>{detail.items.length>0&&<div><strong>Selected dishes</strong><ul>{detail.items.map(item=><li key={item.id}>{item.name} ({item.portion}) - {money(item.price)}</li>)}</ul></div>}<div><button onClick={()=>window.admin.enquiries.copyReference(detail.id).then(()=>notify("Reference copied."))}>Copy reference</button><button onClick={()=>window.admin.enquiries.call(detail.id)}>Call customer</button><button className="primary" onClick={()=>window.admin.enquiries.openWhatsApp(detail.id)}>Open WhatsApp</button><button onClick={close}>Close</button></div></section></div>}
-
-function EnquiriesPage({notify,dataVersion,onViewed}:{notify(message:string):void;dataVersion:number;onViewed():void}){const[rows,setRows]=useState<EnquiryDetail[]>([]),[selected,setSelected]=useState<EnquiryDetail|null>(null),[query,setQuery]=useState(""),[type,setType]=useState("all"),[status,setStatus]=useState("all");const range=monthRange();const load=()=>window.admin.enquiries.list({query,type,status,from:range.from,to:range.to}).then(setRows);useEffect(()=>{void load()},[query,type,status,dataVersion]);useEffect(()=>{if(selected)void window.admin.enquiries.detail(selected.id).then(value=>value&&setSelected(value))},[dataVersion]);async function view(row:EnquiryDetail){const detail=row.seenAt?await window.admin.enquiries.detail(row.id):await window.admin.enquiries.markSeen(row.id);if(detail){setSelected(detail);setRows(current=>current.map(item=>item.id===detail.id?detail:item));if(!row.seenAt)onViewed()}}async function transition(value:EnquiryDetail["status"]){if(!selected)return;setSelected(await window.admin.enquiries.updateStatus(selected.id,value));await load();notify("Enquiry status updated.")}return <><Panel title="Website enquiries"><div className="unified-order-toolbar"><input className="search" placeholder="Search reference, customer or requirement" value={query} onChange={e=>setQuery(e.target.value)}/><select value={type} onChange={e=>setType(e.target.value)}><option value="all">All types</option><option value="party">Party</option><option value="bulk">Bulk</option><option value="tiffin">Tiffin</option></select><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option>{["new","contacted","quoted","converted","closed"].map(value=><option key={value}>{value}</option>)}</select></div><div className="order-list">{rows.map(row=><article className={`unified-order ${row.seenAt?"seen":"unread"}`} key={row.id}><div><strong>{row.reference} · {row.customer.name}</strong><span>{row.type} · {indiaDateTime.format(new Date(row.createdAt))}</span></div><b>{row.seenAt?(row.status==="new"?"seen":row.status):"unread"}</b><button onClick={()=>view(row).catch(error=>notify(error.message))}>View</button></article>)}{!rows.length&&<Empty text="No enquiries match these filters."/>}</div></Panel>{selected&&<div className="editor-overlay" role="dialog" aria-modal="true"><section className="customer-editor enquiry-workspace-detail"><header><h2>{selected.reference}</h2><button onClick={()=>setSelected(null)}>Close</button></header><p><strong>{selected.customer.name}</strong><br/>{selected.customer.phone}{selected.customer.email?<><br/>{selected.customer.email}</>:null}</p>{selected.address&&<p>{String(selected.address.formattedAddress??"")}</p>}<dl>{Object.entries(selected.requirements).map(([key,value])=><div key={key}><dt>{key.replace(/([A-Z])/g," $1")}</dt><dd>{String(value||"-")}</dd></div>)}</dl>{selected.items.length>0&&<ul>{selected.items.map(item=><li key={item.id}>{item.name} · {money(item.price)}</li>)}</ul>}<label>Status<select value={selected.status} onChange={e=>transition(e.target.value as EnquiryDetail["status"])}>{["new","contacted","quoted","converted","closed"].map(value=><option key={value}>{value}</option>)}</select></label><div className="modal-actions"><button onClick={()=>window.admin.enquiries.copyReference(selected.id)}>Copy reference</button><button onClick={()=>window.admin.enquiries.call(selected.id)}>Call</button><button onClick={()=>window.admin.enquiries.openWhatsApp(selected.id)}>WhatsApp</button><button disabled={!selected.customer.email} onClick={()=>window.admin.enquiries.composeEmail(selected.id)}>Email</button></div></section></div>}</>}
-
-function ImagePreviewModal({count,close,notify}:{count:number;close():void;notify(message:string):void}){
-  const [images,setImages]=useState<string[]>([]);const [current,setCurrent]=useState(0);const [zoom,setZoom]=useState(1);
-  const changeZoom=(delta:number)=>setZoom((value)=>Math.min(3,Math.max(.5,Math.round((value+delta)*4)/4)));
-  useEffect(()=>{let active=true;Promise.all(Array.from({length:count},(_,index)=>window.admin.images.preview(index))).then((values)=>{if(active)setImages(values);}).catch((error)=>{notify(`Images were saved, but preview failed: ${error instanceof Error?error.message:String(error)}`);close();});return()=>{active=false};},[count]);
-  useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.key==="Escape")close();if(event.key==="ArrowLeft")setCurrent((value)=>(value-1+count)%count);if(event.key==="ArrowRight")setCurrent((value)=>(value+1)%count);if(event.key==="+"||event.key==="=")changeZoom(.25);if(event.key==="-")changeZoom(-.25);if(event.key==="0")setZoom(1);};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key);},[count]);
-  return <div className="image-preview-shell" role="dialog" aria-modal="true" aria-label="Generated menu image preview"><button className="image-preview-backdrop" aria-label="Close preview" onClick={close}/><section className="image-preview-modal"><header><div><small>EXPORT COMPLETE</small><h2>Generated menu images</h2></div><div className="preview-actions"><div className="zoom-controls" aria-label="Preview zoom controls"><button aria-label="Zoom out" title="Zoom out (-)" disabled={zoom<=.5} onClick={()=>changeZoom(-.25)}>-</button><button title="Reset zoom (0)" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button aria-label="Zoom in" title="Zoom in (+)" disabled={zoom>=3} onClick={()=>changeZoom(.25)}>+</button></div><button onClick={()=>window.admin.images.open(current).catch((error)=>notify(error.message))}>Open image</button><button onClick={()=>window.admin.images.showInFolder(current).catch((error)=>notify(error.message))}>Show in folder</button><button onClick={close}>Close</button></div></header><main className={zoom===1?"fit":"zoomed"}>{images[current]?<div className="preview-image-stage" style={{width:zoom>1?`${zoom*100}%`:"100%",height:zoom>1?`${zoom*100}%`:"100%"}}><img style={{width:zoom<1?`${zoom*100}%`:"100%",height:zoom<1?`${zoom*100}%`:"100%"}} src={images[current]} alt={`Generated menu image ${current+1} of ${count}`}/></div>:<Empty text="Loading generated image preview..."/>}</main>{count>1&&<><button className="preview-arrow previous" aria-label="Previous image" onClick={()=>setCurrent((value)=>(value-1+count)%count)}>&larr;</button><button className="preview-arrow next" aria-label="Next image" onClick={()=>setCurrent((value)=>(value+1)%count)}>&rarr;</button></>}<footer><strong>{current+1} of {count}</strong><span className="preview-hint">Scroll to pan when zoomed. Use +, -, or 0.</span>{count>1&&<div className="preview-thumbnails">{images.map((source,index)=><button className={current===index?"active":""} key={index} onClick={()=>setCurrent(index)} aria-label={`Preview image ${index+1}`}><img src={source} alt=""/></button>)}</div>}</footer></section></div>;
+function EnquiryDetailModal({
+  detail,
+  close,
+  notify,
+}: {
+  detail: EnquiryDetail;
+  close(): void;
+  notify(message: string): void;
+}) {
+  const [converting, setConverting] = useState(false);
+  const [current, setCurrent] = useState(detail);
+  const converted =
+    current.localConversion ??
+    (current.status === "converted"
+      ? {
+          reference: current.convertedReference ?? "service",
+          syncPending: false,
+          kind:
+            current.type === "tiffin"
+              ? ("tiffin-plan" as const)
+              : ("order" as const),
+        }
+      : null);
+  async function changeStatus(status: EnquiryDetail["status"]) {
+    const updated = await window.admin.enquiries.updateStatus(
+      current.id,
+      status,
+    );
+    if (updated) setCurrent(updated);
+    notify("Enquiry status updated.");
+  }
+  async function retrySync() {
+    await window.admin.enquiries.retryConversion(current.id);
+    const updated = await window.admin.enquiries.detail(current.id);
+    if (updated) setCurrent(updated);
+    notify("Enquiry conversion status synchronized with Neon.");
+  }
+  const enquiryStatusOptions:EnquiryDetail["status"][]=current.status==="new"?["new","reviewing","closed"]:current.status==="reviewing"?["reviewing","quoted","closed"]:current.status==="contacted"?["contacted","reviewing","quoted","closed"]:current.status==="quoted"?["quoted","closed"]:[current.status];
+  return (
+    <>
+      {converting ? (
+        <EnquiryConversion
+          detail={current}
+          close={() => setConverting(false)}
+          done={async () => close()}
+          notify={notify}
+        />
+      ) : (
+        <div
+          className="editor-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${current.type} enquiry ${current.reference}`}
+        >
+          <section className="customer-editor enquiry-workspace-detail">
+            <header>
+              <div>
+                <small>{current.type.toUpperCase()} ENQUIRY</small>
+                <h2>{current.reference}</h2>
+              </div>
+              <button onClick={close}>Close</button>
+            </header>
+            <section className="enquiry-drawer-section enquiry-customer-card">
+              <span className="enquiry-section-label">Customer</span>
+              <strong>{current.customer.name}</strong>
+              <span className="enquiry-contact-value">
+                {current.customer.phone}
+              </span>
+              {current.customer.email && (
+                <span className="enquiry-contact-value">
+                  {current.customer.email}
+                </span>
+              )}
+              {current.address && (
+                <p>
+                  {String(
+                    current.address.formattedAddress ??
+                      current.address.address ??
+                      "",
+                  )}
+                </p>
+              )}
+            </section>
+            <section className="enquiry-drawer-section">
+              <span className="enquiry-section-label">Requirements</span>
+              <dl className="enquiry-requirements">
+                {Object.entries(current.requirements).map(([name, value]) => (
+                  <div key={name}>
+                    <dt>{name.replace(/([A-Z])/g, " $1")}</dt>
+                    <dd>{String(value || "-")}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+            {current.items.length > 0 && (
+              <section className="enquiry-drawer-section">
+                <span className="enquiry-section-label">Selected dishes</span>
+                <div className="enquiry-item-list">
+                  {current.items.map((item) => (
+                    <article key={item.id}>
+                      <div>
+                        <strong>{item.name}</strong>
+                        <small>{item.portion}</small>
+                      </div>
+                      <b>{money(item.price)}</b>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+            <section className="enquiry-drawer-section enquiry-status-row">
+              <label>
+                Status
+                <select
+                  value={current.status}
+                  disabled={Boolean(converted)}
+                  onChange={(event) =>
+                    changeStatus(
+                      event.target.value as EnquiryDetail["status"],
+                    ).catch((error) => notify(error.message))
+                  }
+                >
+                  {enquiryStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status === "contacted" ? "Contacted (legacy)" : status.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+            {converted && (
+              <p
+                className={
+                  converted.syncPending
+                    ? "validation-message warning"
+                    : "validation-message success"
+                }
+              >
+                Converted to{" "}
+                {converted.kind === "tiffin-plan" ? "Tiffin plan" : "order"}{" "}
+                <strong>{converted.reference}</strong>.
+                {converted.syncPending
+                  ? " Neon status sync is pending."
+                  : " Neon status is synchronized."}
+              </p>
+            )}
+            <footer className="enquiry-drawer-actions">
+              <button
+                onClick={() =>
+                  window.admin.enquiries
+                    .copyReference(current.id)
+                    .then(() => notify("Reference copied."))
+                }
+              >
+                Copy reference
+              </button>
+              <button onClick={() => window.admin.enquiries.call(current.id)}>
+                Call customer
+              </button>
+              <button
+                onClick={() => window.admin.enquiries.openWhatsApp(current.id)}
+              >
+                WhatsApp follow-up
+              </button>
+              <button onClick={() => window.admin.enquiries.openQuoteWhatsApp(current.id)}>Quotation WhatsApp</button>
+              <button
+                disabled={!current.customer.email}
+                onClick={() => window.admin.enquiries.composeEmail(current.id)}
+              >
+                Email
+              </button>
+              {converted?.syncPending && (
+                <button
+                  onClick={() =>
+                    retrySync().catch((error) => notify(error.message))
+                  }
+                >
+                  Retry Neon status sync
+                </button>
+              )}
+              <button
+                className="primary"
+                disabled={Boolean(converted)}
+                onClick={() => setConverting(true)}
+              >
+                {converted
+                  ? `Converted to ${converted.reference}`
+                  : current.type === "tiffin"
+                    ? "Convert to Tiffin plan"
+                    : "Convert to confirmed order"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </>
+  );
 }
 
-function StartupLoader(){return <div className="startup-loader" role="status" aria-live="polite"><div className="loader-mark"><span>G</span><i></i><i></i><i></i></div><strong>Gruhswad</strong><p>Preparing your kitchen dashboard</p><div className="loader-steam"><b></b><b></b><b></b></div></div>;}
-
-function DateFilter({ range, setRange }: { range: DateRange; setRange: (value: DateRange) => void }) {
-  return <div className="date-filter"><label>From<input type="date" value={range.from} onChange={(event) => setRange({ ...range, from: event.target.value })} /></label><label>To<input type="date" value={range.to} onChange={(event) => setRange({ ...range, to: event.target.value })} /></label></div>;
+function EnquiriesPage({
+  notify,
+  dataVersion,
+  unseenCount,
+  openEnquiry,
+  onViewed,
+}: {
+  notify(message: string): void;
+  dataVersion: number;
+  unseenCount: number | null;
+  openEnquiry(detail: EnquiryDetail): void;
+  onViewed(): void;
+}) {
+  // Kept only until the legacy inline detail markup below is removed; all
+  // enquiry rows now open the shared conversion-capable detail dialog.
+  const [selected, setSelected] = useState<EnquiryDetail | null>(null);
+  const [rows, setRows] = useState<EnquiryDetail[]>([]),
+    [query, setQuery] = useState(""),
+    [type, setType] = useState("all"),
+    [status, setStatus] = useState("all");
+  const load = () =>
+    window.admin.enquiries
+      .list({ query, type, status, from: "2000-01-01", to: "2999-12-31" })
+      .then(setRows);
+  useEffect(() => {
+    void load();
+  }, [query, type, status, dataVersion]);
+  async function view(row: EnquiryDetail) {
+    const detail = row.seenAt
+      ? await window.admin.enquiries.detail(row.id)
+      : await window.admin.enquiries.markSeen(row.id);
+    if (detail) {
+      openEnquiry(detail);
+      setRows((current) =>
+        current.map((item) => (item.id === detail.id ? detail : item)),
+      );
+      if (!row.seenAt) onViewed();
+    }
+  }
+  async function transition(_value: EnquiryDetail["status"]) {
+    if (!selected) return;
+  }
+  return (
+    <>
+      <Panel title="Website enquiries">
+        <div className="unified-order-toolbar">
+          <input
+            className="search"
+            placeholder="Search reference, customer or requirement"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="all">All types</option>
+            <option value="party">Party</option>
+            <option value="bulk">Bulk</option>
+            <option value="tiffin">Tiffin</option>
+          </select>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">All statuses</option>
+            {["new", "reviewing", "contacted", "quoted", "converted", "closed"].map(
+              (value) => (
+                <option key={value}>{value}</option>
+              ),
+            )}
+          </select>
+        </div>
+        {unseenCount === null ? (
+          <p className="validation-message warning">
+            The enquiry count is unavailable until Neon reconnects. No cached
+            count is being shown.
+          </p>
+        ) : null}
+        <div className="order-list">
+          {rows.map((row) => (
+            <article
+              className={`unified-order ${row.seenAt ? "seen" : "unread"}`}
+              key={row.id}
+            >
+              <div>
+                <strong>
+                  {row.reference} · {row.customer.name}
+                </strong>
+                <span>
+                  {row.type} · {indiaDateTime.format(new Date(row.createdAt))}
+                </span>
+              </div>
+              <b>
+                {row.seenAt
+                  ? row.status === "new"
+                    ? "seen"
+                    : row.status
+                  : "unread"}
+              </b>
+              <button
+                onClick={() =>
+                  view(row).catch((error) => notify(error.message))
+                }
+              >
+                View
+              </button>
+            </article>
+          ))}
+          {!rows.length && <Empty text="No enquiries match these filters." />}
+        </div>
+      </Panel>
+      {selected && (
+        <div className="editor-overlay" role="dialog" aria-modal="true">
+          <section className="customer-editor enquiry-workspace-detail">
+            <header>
+              <h2>{selected.reference}</h2>
+              <button onClick={() => setSelected(null)}>Close</button>
+            </header>
+            <p>
+              <strong>{selected.customer.name}</strong>
+              <br />
+              {selected.customer.phone}
+              {selected.customer.email ? (
+                <>
+                  <br />
+                  {selected.customer.email}
+                </>
+              ) : null}
+            </p>
+            {selected.address && (
+              <p>{String(selected.address.formattedAddress ?? "")}</p>
+            )}
+            <dl>
+              {Object.entries(selected.requirements).map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key.replace(/([A-Z])/g, " $1")}</dt>
+                  <dd>{String(value || "-")}</dd>
+                </div>
+              ))}
+            </dl>
+            {selected.items.length > 0 && (
+              <ul>
+                {selected.items.map((item) => (
+                  <li key={item.id}>
+                    {item.name} · {money(item.price)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <label>
+              Status
+              <select
+                value={selected.status}
+                onChange={(e) =>
+                  transition(e.target.value as EnquiryDetail["status"])
+                }
+              >
+                {["new", "reviewing", "contacted", "quoted", "converted", "closed"].map(
+                  (value) => (
+                    <option key={value}>{value}</option>
+                  ),
+                )}
+              </select>
+            </label>
+            <div className="modal-actions">
+              <button
+                onClick={() =>
+                  window.admin.enquiries.copyReference(selected.id)
+                }
+              >
+                Copy reference
+              </button>
+              <button onClick={() => window.admin.enquiries.call(selected.id)}>
+                Call
+              </button>
+              <button
+                onClick={() => window.admin.enquiries.openWhatsApp(selected.id)}
+              >
+                WhatsApp
+              </button>
+              <button
+                disabled={!selected.customer.email}
+                onClick={() => window.admin.enquiries.composeEmail(selected.id)}
+              >
+                Email
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
 }
 
-function DashboardPage({ range,openSync }: { range: DateRange;openSync:()=>void }) {
+function ImagePreviewModal({
+  count,
+  close,
+  notify,
+}: {
+  count: number;
+  close(): void;
+  notify(message: string): void;
+}) {
+  const [images, setImages] = useState<string[]>([]);
+  const [current, setCurrent] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const changeZoom = (delta: number) =>
+    setZoom((value) =>
+      Math.min(3, Math.max(0.5, Math.round((value + delta) * 4) / 4)),
+    );
+  useEffect(() => {
+    let active = true;
+    Promise.all(
+      Array.from({ length: count }, (_, index) =>
+        window.admin.images.preview(index),
+      ),
+    )
+      .then((values) => {
+        if (active) setImages(values);
+      })
+      .catch((error) => {
+        notify(
+          `Images were saved, but preview failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        close();
+      });
+    return () => {
+      active = false;
+    };
+  }, [count]);
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+      if (event.key === "ArrowLeft")
+        setCurrent((value) => (value - 1 + count) % count);
+      if (event.key === "ArrowRight")
+        setCurrent((value) => (value + 1) % count);
+      if (event.key === "+" || event.key === "=") changeZoom(0.25);
+      if (event.key === "-") changeZoom(-0.25);
+      if (event.key === "0") setZoom(1);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [count]);
+  return (
+    <div
+      className="image-preview-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Generated menu image preview"
+    >
+      <button
+        className="image-preview-backdrop"
+        aria-label="Close preview"
+        onClick={close}
+      />
+      <section className="image-preview-modal">
+        <header>
+          <div>
+            <small>EXPORT COMPLETE</small>
+            <h2>Generated menu images</h2>
+          </div>
+          <div className="preview-actions">
+            <div className="zoom-controls" aria-label="Preview zoom controls">
+              <button
+                aria-label="Zoom out"
+                title="Zoom out (-)"
+                disabled={zoom <= 0.5}
+                onClick={() => changeZoom(-0.25)}
+              >
+                -
+              </button>
+              <button title="Reset zoom (0)" onClick={() => setZoom(1)}>
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                aria-label="Zoom in"
+                title="Zoom in (+)"
+                disabled={zoom >= 3}
+                onClick={() => changeZoom(0.25)}
+              >
+                +
+              </button>
+            </div>
+            <button
+              onClick={() =>
+                window.admin.images
+                  .open(current)
+                  .catch((error) => notify(error.message))
+              }
+            >
+              Open image
+            </button>
+            <button
+              onClick={() =>
+                window.admin.images
+                  .showInFolder(current)
+                  .catch((error) => notify(error.message))
+              }
+            >
+              Show in folder
+            </button>
+            <button onClick={close}>Close</button>
+          </div>
+        </header>
+        <main className={zoom === 1 ? "fit" : "zoomed"}>
+          {images[current] ? (
+            <div
+              className="preview-image-stage"
+              style={{
+                width: zoom > 1 ? `${zoom * 100}%` : "100%",
+                height: zoom > 1 ? `${zoom * 100}%` : "100%",
+              }}
+            >
+              <img
+                style={{
+                  width: zoom < 1 ? `${zoom * 100}%` : "100%",
+                  height: zoom < 1 ? `${zoom * 100}%` : "100%",
+                }}
+                src={images[current]}
+                alt={`Generated menu image ${current + 1} of ${count}`}
+              />
+            </div>
+          ) : (
+            <Empty text="Loading generated image preview..." />
+          )}
+        </main>
+        {count > 1 && (
+          <>
+            <button
+              className="preview-arrow previous"
+              aria-label="Previous image"
+              onClick={() => setCurrent((value) => (value - 1 + count) % count)}
+            >
+              &larr;
+            </button>
+            <button
+              className="preview-arrow next"
+              aria-label="Next image"
+              onClick={() => setCurrent((value) => (value + 1) % count)}
+            >
+              &rarr;
+            </button>
+          </>
+        )}
+        <footer>
+          <strong>
+            {current + 1} of {count}
+          </strong>
+          <span className="preview-hint">
+            Scroll to pan when zoomed. Use +, -, or 0.
+          </span>
+          {count > 1 && (
+            <div className="preview-thumbnails">
+              {images.map((source, index) => (
+                <button
+                  className={current === index ? "active" : ""}
+                  key={index}
+                  onClick={() => setCurrent(index)}
+                  aria-label={`Preview image ${index + 1}`}
+                >
+                  <img src={source} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function StartupLoader() {
+  return (
+    <div className="startup-loader" role="status" aria-live="polite">
+      <div className="loader-mark">
+        <span>G</span>
+        <i></i>
+        <i></i>
+        <i></i>
+      </div>
+      <strong>Gruhswad</strong>
+      <p>Preparing your kitchen dashboard</p>
+      <div className="loader-steam">
+        <b></b>
+        <b></b>
+        <b></b>
+      </div>
+    </div>
+  );
+}
+
+function DateFilter({
+  range,
+  setRange,
+}: {
+  range: DateRange;
+  setRange: (value: DateRange) => void;
+}) {
+  return (
+    <div className="date-filter">
+      <label>
+        From
+        <input
+          type="date"
+          value={range.from}
+          onChange={(event) => setRange({ ...range, from: event.target.value })}
+        />
+      </label>
+      <label>
+        To
+        <input
+          type="date"
+          value={range.to}
+          onChange={(event) => setRange({ ...range, to: event.target.value })}
+        />
+      </label>
+    </div>
+  );
+}
+
+function DashboardPage({
+  range,
+  openSync,
+}: {
+  range: DateRange;
+  openSync: () => void;
+}) {
   const [data, setData] = useState<Dashboard | null>(null);
-  const [attention,setAttention]=useState<SyncAttentionStatus|null>(null);
-  useEffect(() => { window.admin.dashboard(range).then(setData);window.admin.sync.attention().then(setAttention).catch(()=>setAttention(null)); }, [range]);
+  const [attention, setAttention] = useState<SyncAttentionStatus | null>(null);
+  useEffect(() => {
+    window.admin.dashboard(range).then(setData);
+    window.admin.sync
+      .attention()
+      .then(setAttention)
+      .catch(() => setAttention(null));
+  }, [range]);
   if (!data) return <Empty text="Loading dashboard..." />;
-  return <>{attention&&attention.conflicts>0&&<section className="dashboard-conflict-alert" role="alert"><div><strong>Cloud synchronization needs attention</strong><p>{attention.conflicts} unresolved sync conflict{attention.conflicts===1?" is":"s are"} blocking a safe cloud update. Review and resolve {attention.conflicts===1?"it":"them"} before pushing to Neon.</p></div><button className="primary" onClick={openSync}>Review conflicts in Sync Centre</button></section>}<section className="metric-grid"><Metric label="Completed revenue" value={money(data.revenue)} tone="green" /><Metric label="Expenses" value={money(data.expenses)} tone="red" /><Metric label="Profit / loss" value={money(data.profit)} tone={data.profit >= 0 ? "gold" : "red"} /><Metric label="Orders" value={String(data.orderCount)} tone="brown" /><Metric label="Open order value" value={money(data.outstanding)} tone="red" /><Metric label="Average order" value={money(data.averageOrder)} tone="green" /></section>
-    <section className="split"><Panel title="Recent orders"><p className="muted">Orders placed during the selected date range, including orders with a later pickup date.</p><DataTable rows={data.recentOrders} columns={[["customer_name", "Customer"], ["created_at", "Placed at"], ["service_date", "Pickup date"], ["status", "Status"], ["total", "Total"]]} moneyKeys={["total"]} /></Panel>
-      <Panel title="Expenses by category">{data.expenseByCategory.length ? <div className="bars">{data.expenseByCategory.map((row) => <div key={row.category}><span>{row.category}</span><b style={{ width: `${Math.max(8, row.total / Math.max(...data.expenseByCategory.map((item) => item.total)) * 100)}%` }} /><strong>{money(row.total)}</strong></div>)}</div> : <Empty text="No expenses in this period." />}</Panel>
-    </section></>;
+  return (
+    <>
+      {attention && attention.conflicts > 0 && (
+        <section className="dashboard-conflict-alert" role="alert">
+          <div>
+            <strong>Cloud synchronization needs attention</strong>
+            <p>
+              {attention.conflicts} unresolved sync conflict
+              {attention.conflicts === 1 ? " is" : "s are"} blocking a safe
+              cloud update. Review and resolve{" "}
+              {attention.conflicts === 1 ? "it" : "them"} before pushing to
+              Neon.
+            </p>
+          </div>
+          <button className="primary" onClick={openSync}>
+            Review conflicts in Sync Centre
+          </button>
+        </section>
+      )}
+      <section className="metric-grid">
+        <Metric
+          label="Completed revenue"
+          value={money(data.revenue)}
+          tone="green"
+        />
+        <Metric label="Expenses" value={money(data.expenses)} tone="red" />
+        <Metric
+          label="Profit / loss"
+          value={money(data.profit)}
+          tone={data.profit >= 0 ? "gold" : "red"}
+        />
+        <Metric label="Orders" value={String(data.orderCount)} tone="brown" />
+        <Metric
+          label="Open order value"
+          value={money(data.outstanding)}
+          tone="red"
+        />
+        <Metric
+          label="Average order"
+          value={money(data.averageOrder)}
+          tone="green"
+        />
+      </section>
+      <section className="split">
+        <Panel title="Recent orders">
+          <p className="muted">
+            Orders placed during the selected date range, including orders with
+            a later pickup date.
+          </p>
+          <DataTable
+            rows={data.recentOrders}
+            columns={[
+              ["customer_name", "Customer"],
+              ["created_at", "Placed at"],
+              ["service_date", "Pickup date"],
+              ["status", "Status"],
+              ["total", "Total"],
+            ]}
+            moneyKeys={["total"]}
+          />
+        </Panel>
+        <Panel title="Expenses by category">
+          {data.expenseByCategory.length ? (
+            <div className="bars">
+              {data.expenseByCategory.map((row) => (
+                <div key={row.category}>
+                  <span>{row.category}</span>
+                  <b
+                    style={{
+                      width: `${Math.max(8, (row.total / Math.max(...data.expenseByCategory.map((item) => item.total))) * 100)}%`,
+                    }}
+                  />
+                  <strong>{money(row.total)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty text="No expenses in this period." />
+          )}
+        </Panel>
+      </section>
+    </>
+  );
 }
-function Metric({ label, value, tone }: { label: string; value: string; tone: string }) { return <article className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>; }
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <article className={`metric ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
 
-function OrdersPage({ range, notify }: { range: DateRange; notify: (message: string) => void }) {
-  const [rows, setRows] = useState<any[]>([]); const [catalog, setCatalog] = useState<any>({ items: [] }); const [open, setOpen] = useState(false);
+function OrdersPage({
+  range,
+  notify,
+}: {
+  range: DateRange;
+  notify: (message: string) => void;
+}) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<any>({ items: [] });
+  const [open, setOpen] = useState(false);
   const load = () => window.admin.orders.list(range).then(setRows);
-  useEffect(() => { load(); window.admin.menu.catalog().then(setCatalog); }, [range]);
-  async function status(id: string, value: any) { await window.admin.orders.updateStatus(id, value); load(); notify("Order status updated."); }
-  async function paid(row: any) { const amount = Math.max(0, row.total - row.paid); if (!amount) return; await window.admin.orders.addPayment({ orderId: row.id, amount, receivedAt: new Date().toISOString(), method: "UPI", status: "received" }); load(); notify("Payment recorded."); }
-  return <Panel title="Order history" action={<button className="primary" onClick={() => setOpen(true)}>New order</button>}>
-    {open && <OrderForm items={catalog.items} close={() => setOpen(false)} saved={() => { setOpen(false); load(); notify("Order saved."); }} />}
-    {rows.length ? <div className="order-list">{rows.map((row) => <article key={row.id}><div><strong>{row.customer_name}</strong><span>{row.service_date} / {row.phone}</span></div><b>{money(row.total)}</b><select value={row.status} onChange={(event) => status(row.id, event.target.value)}>{["draft", "confirmed", "preparing", "ready", "completed", "cancelled"].map((value) => <option key={value}>{value}</option>)}</select><button disabled={row.payment_status === "paid"} onClick={() => paid(row)}>{row.payment_status === "paid" ? "Paid" : "Mark paid"}</button></article>)}</div> : <Empty text="No orders found for this period." />}
-  </Panel>;
+  useEffect(() => {
+    load();
+    window.admin.menu.catalog().then(setCatalog);
+  }, [range]);
+  async function status(id: string, value: any) {
+    await window.admin.orders.updateStatus(id, value);
+    load();
+    notify("Order status updated.");
+  }
+  async function paid(row: any) {
+    const amount = Math.max(0, row.total - row.paid);
+    if (!amount) return;
+    await window.admin.orders.addPayment({
+      orderKind: "local",
+      orderId: row.id,
+      amount,
+      occurredAt: new Date().toISOString(),
+      method: "UPI",
+      direction: "received",
+      notes: "",
+    });
+    load();
+    notify("Payment recorded.");
+  }
+  return (
+    <Panel
+      title="Order history"
+      action={
+        <button className="primary" onClick={() => setOpen(true)}>
+          New order
+        </button>
+      }
+    >
+      {open && (
+        <OrderForm
+          items={catalog.items}
+          close={() => setOpen(false)}
+          saved={() => {
+            setOpen(false);
+            load();
+            notify("Order saved.");
+          }}
+        />
+      )}
+      {rows.length ? (
+        <div className="order-list">
+          {rows.map((row) => (
+            <article key={row.id}>
+              <div>
+                <strong>{row.customer_name}</strong>
+                <span>
+                  {row.service_date} / {row.phone}
+                </span>
+              </div>
+              <b>{money(row.total)}</b>
+              <select
+                value={row.status}
+                onChange={(event) => status(row.id, event.target.value)}
+              >
+                {[
+                  "draft",
+                  "confirmed",
+                  "preparing",
+                  "ready",
+                  "completed",
+                  "cancelled",
+                ].map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+              <button
+                disabled={row.payment_status === "paid"}
+                onClick={() => paid(row)}
+              >
+                {row.payment_status === "paid" ? "Paid" : "Mark paid"}
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <Empty text="No orders found for this period." />
+      )}
+    </Panel>
+  );
 }
 
-function OrderForm({ items, close, saved }: { items: any[]; close: () => void; saved: () => void }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [date, setDate] = useState(today()); const [selected, setSelected] = useState("");
+function OrderForm({
+  items,
+  close,
+  saved,
+}: {
+  items: any[];
+  close: () => void;
+  saved: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [date, setDate] = useState(today());
+  const [selected, setSelected] = useState("");
   const item = items.find((value) => value.id === selected);
-  async function submit(event: React.FormEvent) { event.preventDefault(); if (!item) return; await window.admin.orders.save({ customer:{name,phone,email:"",archived:false}, serviceDate: date, fulfilment: "pickup", address: "", notes: "", source: {id:"direct",name:"Direct order"}, status: "draft", lines: [{ menuItemId: item.id, name: item.name, quantity: 1, unitPrice: item.price }] }); saved(); }
-  return <form className="inline-form" onSubmit={submit}><h3>Record an order</h3><label>Customer<input required value={name} onChange={(event) => setName(event.target.value)} /></label><label>Phone<input required value={phone} onChange={(event) => setPhone(event.target.value)} /></label><label>Service date<input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Dish<select required value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Choose a dish</option>{items.filter((value) => value.available).map((value) => <option value={value.id} key={value.id}>{value.name} / {money(value.price)}</option>)}</select></label><div><button type="button" onClick={close}>Cancel</button><button className="primary">Save order</button></div></form>;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!item) return;
+    await window.admin.orders.save({
+      customer: { name, phone, email: "", archived: false },
+      serviceType: "general",
+      serviceDate: date,
+      serviceEndDate: null,
+      serviceStartTime: null,
+      serviceEndTime: null,
+      fulfilment: "pickup",
+      address: "",
+      notes: "",
+      source: { id: "direct", name: "Direct order" },
+      status: "draft",
+      adjustmentLabel: "",
+      adjustmentAmount: 0,
+      enquiryId: null,
+      enquiryReference: null,
+      tiffinPlanId: null,
+      lines: [
+        {
+          menuItemId: item.id,
+          name: item.name,
+          quantity: 1,
+          unitPrice: item.price,
+          consumptionMode: "none",
+        },
+      ],
+    });
+    saved();
+  }
+  return (
+    <form className="inline-form" onSubmit={submit}>
+      <h3>Record an order</h3>
+      <label>
+        Customer
+        <input
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <label>
+        Phone
+        <input
+          required
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+        />
+      </label>
+      <label>
+        Service date
+        <input
+          type="date"
+          required
+          value={date}
+          onChange={(event) => setDate(event.target.value)}
+        />
+      </label>
+      <label>
+        Dish
+        <select
+          required
+          value={selected}
+          onChange={(event) => setSelected(event.target.value)}
+        >
+          <option value="">Choose a dish</option>
+          {items
+            .filter((value) => value.available)
+            .map((value) => (
+              <option value={value.id} key={value.id}>
+                {value.name} / {money(value.price)}
+              </option>
+            ))}
+        </select>
+      </label>
+      <div>
+        <button type="button" onClick={close}>
+          Cancel
+        </button>
+        <button className="primary">Save order</button>
+      </div>
+    </form>
+  );
 }
 
-function ExpensesPage({ range, notify }: { range: DateRange; notify: (message: string) => void }) {
-  const [rows, setRows] = useState<any[]>([]); const [form, setForm] = useState({ date: today(), category: "Ingredients", description: "", amount: "", paymentMethod: "UPI", notes: "" });
-  const load = () => window.admin.expenses.list(range).then(setRows); useEffect(() => { load(); }, [range]);
-  async function submit(event: React.FormEvent) { event.preventDefault(); await window.admin.expenses.save({ ...form, amount: Number(form.amount) }); setForm({ ...form, description: "", amount: "", notes: "" }); load(); notify("Expense recorded."); }
-  return <section className="split wide-left"><Panel title="Monthly expenses"><DataTable rows={rows} columns={[["date", "Date"], ["category", "Category"], ["description", "Description"], ["payment_method", "Paid via"], ["amount", "Amount"]]} moneyKeys={["amount"]} actions={(row) => <button className="danger" onClick={async () => { if (!confirm(`Delete expense: ${row.description}?`)) return; await window.admin.expenses.remove(row.id); await load(); notify("Expense deleted."); }}>Delete</button>} /></Panel><Panel title="Record purchase"><form className="stack-form" onSubmit={submit}>{Object.entries(form).map(([key, value]) => <label key={key}>{key === "paymentMethod" ? "Payment method" : key.replace(/^./, (letter) => letter.toUpperCase())}<input type={key === "date" ? "date" : key === "amount" ? "number" : "text"} required={key !== "notes"} value={value} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}<button className="primary">Add expense</button></form></Panel></section>;
+function ExpensesPage({
+  range,
+  notify,
+}: {
+  range: DateRange;
+  notify: (message: string) => void;
+}) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [form, setForm] = useState({
+    date: today(),
+    category: "Ingredients",
+    description: "",
+    amount: "",
+    paymentMethod: "UPI",
+    notes: "",
+  });
+  const [receipt, setReceipt] = useState<any | null>(null);
+  const [stock, setStock] = useState<any[]>([]);
+  const [mappings, setMappings] = useState<Record<string, any>>({});
+  const [scanning, setScanning] = useState(false);
+  const load = () => window.admin.expenses.list(range).then(setRows);
+  useEffect(() => {
+    load();
+  }, [range]);
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    await window.admin.expenses.save({ ...form, amount: Number(form.amount) });
+    setForm({ ...form, description: "", amount: "", notes: "" });
+    load();
+    notify("Expense recorded.");
+  }
+  async function scan() {
+    setScanning(true);
+    try {
+      const value = await window.admin.expenses.scanReceipt();
+      if (!value) return;
+      setReceipt(value);
+      setMappings({});
+      setStock(await window.admin.inventory.list());
+      const e = value.extracted;
+      setForm({
+        date: e.date || today(),
+        category: e.category || "Ingredients",
+        description: e.description || "Merchant purchase",
+        amount: e.amount ? String(e.amount) : "",
+        paymentMethod: e.paymentMethod || "UPI",
+        notes: `Scanned receipt: ${value.originalName}`,
+      });
+    } finally {
+      setScanning(false);
+    }
+  }
+  async function saveScanned(event: React.FormEvent) {
+    event.preventDefault();
+    if (!receipt) return;
+    await window.admin.expenses.saveReceipt({
+      ...form,
+      amount: Number(form.amount),
+      receiptToken: receipt.token,
+      merchant: receipt.extracted.merchant ?? "",
+      invoiceReference: receipt.extracted.invoiceReference ?? "",
+      tax: Number(receipt.extracted.tax ?? 0),
+      duplicateOverrideReason: receipt.duplicateOverrideReason ?? "",
+      inventoryMappings: Object.entries(mappings)
+        .filter(([, row]) => row.stockItemId)
+        .map(([lineId, row]) => ({
+          lineId,
+          ...row,
+          packQuantity: Number(row.packQuantity),
+          unitsPerPack: Number(row.unitsPerPack),
+          totalCost: Number(row.totalCost),
+        })),
+    });
+    setReceipt(null);
+    setMappings({});
+    setForm({
+      date: today(),
+      category: "Ingredients",
+      description: "",
+      amount: "",
+      paymentMethod: "UPI",
+      notes: "",
+    });
+    await load();
+    notify("Receipt reviewed and expense recorded.");
+  }
+  async function viewReceipt(expenseId: string) {
+    const value = await window.admin.expenses.receipt(expenseId);
+    if (!value)
+      return notify("This expense does not have an attached receipt.");
+    await window.admin.expenses.openReceipt(value.id);
+  }
+  return (
+    <>
+      <section className="split wide-left">
+        <Panel title="Monthly expenses">
+          <DataTable
+            rows={rows}
+            columns={[
+              ["date", "Date"],
+              ["category", "Category"],
+              ["description", "Description"],
+              ["payment_method", "Paid via"],
+              ["amount", "Amount"],
+            ]}
+            moneyKeys={["amount"]}
+            actions={(row) => (
+              <div className="table-actions">
+                <button
+                  onClick={() =>
+                    viewReceipt(row.id).catch((error) => notify(error.message))
+                  }
+                >
+                  Receipt
+                </button>
+                <button
+                  className="danger"
+                  onClick={async () => {
+                    if (!confirm(`Delete expense: ${row.description}?`)) return;
+                    await window.admin.expenses.remove(row.id);
+                    await load();
+                    notify("Expense deleted.");
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          />
+        </Panel>
+        <Panel title="Record purchase">
+          <button
+            type="button"
+            className="receipt-scan-button"
+            disabled={scanning}
+            onClick={() => scan().catch((error) => notify(error.message))}
+          >
+            {scanning
+              ? "Reading receipt locally..."
+              : "Scan invoice or receipt"}
+          </button>
+          <p className="muted">
+            JPG, PNG, WebP, or PDF. OCR stays on this computer and all values
+            must be reviewed.
+          </p>
+          <form className="stack-form" onSubmit={submit}>
+            {Object.entries(form).map(([key, value]) => (
+              <label key={key}>
+                {key === "paymentMethod"
+                  ? "Payment method"
+                  : key.replace(/^./, (letter) => letter.toUpperCase())}
+                <input
+                  type={
+                    key === "date"
+                      ? "date"
+                      : key === "amount"
+                        ? "number"
+                        : "text"
+                  }
+                  required={key !== "notes"}
+                  value={value}
+                  onChange={(event) =>
+                    setForm({ ...form, [key]: event.target.value })
+                  }
+                />
+              </label>
+            ))}
+            <button className="primary">Add expense</button>
+          </form>
+        </Panel>
+      </section>
+      {receipt && (
+        <div
+          className="editor-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Review scanned receipt"
+        >
+          <form className="receipt-review" onSubmit={saveScanned}>
+            <header>
+              <div>
+                <small>LOCAL OCR REVIEW</small>
+                <h2>Confirm receipt details</h2>
+              </div>
+              <button type="button" onClick={() => setReceipt(null)}>
+                Close
+              </button>
+            </header>
+            <div className="receipt-review-grid">
+              <aside>
+                <img
+                  src={receipt.previewDataUrl}
+                  alt={`Preview of ${receipt.originalName}`}
+                />
+                <strong>{receipt.originalName}</strong>
+                <small>OCR text is retained with the expense for audit.</small>
+              </aside>
+              <main>
+                <div className="form-grid">
+                  {Object.entries(form).map(([key, value]) => (
+                    <label key={key}>
+                      {key === "paymentMethod"
+                        ? "Payment method"
+                        : key.replace(/^./, (letter) => letter.toUpperCase())}
+                      <input
+                        type={
+                          key === "date"
+                            ? "date"
+                            : key === "amount"
+                              ? "number"
+                              : "text"
+                        }
+                        required={key !== "notes"}
+                        value={value}
+                        onChange={(event) =>
+                          setForm({ ...form, [key]: event.target.value })
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                {receipt.duplicateCount > 0 && (
+                  <label className="validation-warning">
+                    This receipt has already been imported. Explain why another
+                    expense is required.
+                    <textarea
+                      required
+                      value={receipt.duplicateOverrideReason ?? ""}
+                      onChange={(event) =>
+                        setReceipt({
+                          ...receipt,
+                          duplicateOverrideReason: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                )}
+                <section className="receipt-lines">
+                  <h3>Optional inventory mapping</h3>
+                  <p className="muted">
+                    Map only ingredient lines that should increase local stock.
+                  </p>
+                  {(receipt.extracted.lines ?? []).map((line: any) => (
+                    <article key={line.id}>
+                      <span>
+                        {line.description || "Receipt line"} /{" "}
+                        {money(line.total)}
+                      </span>
+                      <select
+                        value={mappings[line.id]?.stockItemId ?? ""}
+                        onChange={(event) => {
+                          const stockItemId = event.target.value;
+                          setMappings((current) => ({
+                            ...current,
+                            [line.id]: stockItemId
+                              ? {
+                                  stockItemId,
+                                  supplier:
+                                    receipt.extracted.merchant || "Merchant",
+                                  packQuantity: 1,
+                                  packUnit:
+                                    stock.find(
+                                      (item) => item.id === stockItemId,
+                                    )?.base_unit ?? "unit",
+                                  unitsPerPack: 1,
+                                  totalCost: line.total,
+                                }
+                              : {},
+                          }));
+                        }}
+                      >
+                        <option value="">Do not track inventory</option>
+                        {stock
+                          .filter((item) => !item.archived_at)
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                      </select>
+                      {mappings[line.id]?.stockItemId && (
+                        <div className="receipt-map-fields">
+                          <input
+                            aria-label="Supplier"
+                            value={mappings[line.id].supplier}
+                            onChange={(e) =>
+                              setMappings({
+                                ...mappings,
+                                [line.id]: {
+                                  ...mappings[line.id],
+                                  supplier: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            aria-label="Pack quantity"
+                            type="number"
+                            min=".001"
+                            step="any"
+                            value={mappings[line.id].packQuantity}
+                            onChange={(e) =>
+                              setMappings({
+                                ...mappings,
+                                [line.id]: {
+                                  ...mappings[line.id],
+                                  packQuantity: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <select
+                            aria-label="Pack unit"
+                            value={mappings[line.id].packUnit}
+                            onChange={(e) =>
+                              setMappings({
+                                ...mappings,
+                                [line.id]: {
+                                  ...mappings[line.id],
+                                  packUnit: e.target.value,
+                                },
+                              })
+                            }
+                          >
+                            {["g", "kg", "ml", "l", "unit", "pack"].map(
+                              (value) => (
+                                <option key={value}>{value}</option>
+                              ),
+                            )}
+                          </select>
+                          <input
+                            aria-label="Units per pack"
+                            type="number"
+                            min=".001"
+                            step="any"
+                            value={mappings[line.id].unitsPerPack}
+                            onChange={(e) =>
+                              setMappings({
+                                ...mappings,
+                                [line.id]: {
+                                  ...mappings[line.id],
+                                  unitsPerPack: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            aria-label="Mapped cost"
+                            type="number"
+                            min=".01"
+                            step=".01"
+                            value={mappings[line.id].totalCost}
+                            onChange={(e) =>
+                              setMappings({
+                                ...mappings,
+                                [line.id]: {
+                                  ...mappings[line.id],
+                                  totalCost: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </section>
+              </main>
+            </div>
+            <footer>
+              <span>Nothing is posted until you confirm.</span>
+              <button className="primary">Save reviewed expense</button>
+            </footer>
+          </form>
+        </div>
+      )}
+    </>
+  );
 }
 
-function ReportsPage({ range, notify }: { range: DateRange; notify: (message: string) => void }) {
-  const [data, setData] = useState<Dashboard | null>(null); useEffect(() => { window.admin.dashboard(range).then(setData); }, [range]);
-  return <><section className="report-hero"><div><span>Completed-order result</span><strong>{money(data?.profit ?? 0)}</strong><p>Completed revenue {money(data?.revenue ?? 0)} minus local expenses {money(data?.expenses ?? 0)}</p></div></section><section className="metric-grid report-metrics"><Metric label="Completed revenue" value={money(data?.revenue ?? 0)} tone="green"/><Metric label="Local expenses" value={money(data?.expenses ?? 0)} tone="red"/><Metric label="Orders" value={String(data?.orderCount ?? 0)} tone="brown"/></section><Panel title="Export monthly records"><div className="export-grid">{(["orders", "expenses", "summary"] as const).map((kind) => <button key={kind} onClick={async () => { const path = await window.admin.reports.exportCsv(kind, range); if (path) notify(`Saved ${kind} report.`); }}><b>{kind}</b><span>Download CSV -&gt;</span></button>)}</div></Panel></>;
+function ReportsPage({
+  range,
+  notify,
+}: {
+  range: DateRange;
+  notify: (message: string) => void;
+}) {
+  const [data, setData] = useState<Dashboard | null>(null);
+  useEffect(() => {
+    window.admin.dashboard(range).then(setData);
+  }, [range]);
+  return (
+    <>
+      <section className="report-hero">
+        <div>
+          <span>Cash-basis result</span>
+          <strong>{money(data?.profit ?? 0)}</strong>
+          <p>
+            Net cash revenue {money(data?.revenue ?? 0)} minus local expenses{" "}
+            {money(data?.expenses ?? 0)}
+          </p>
+        </div>
+      </section>
+      <section className="metric-grid report-metrics">
+        <Metric
+          label="Cash revenue"
+          value={money(data?.revenue ?? 0)}
+          tone="green"
+        />
+        <Metric
+          label="Local expenses"
+          value={money(data?.expenses ?? 0)}
+          tone="red"
+        />
+        <Metric
+          label="Orders"
+          value={String(data?.orderCount ?? 0)}
+          tone="brown"
+        />
+      </section>
+      <section className="metric-grid report-metrics">
+        <Metric label="Billed value" value={money(data?.billedValue??0)} tone="brown" />
+        <Metric label="Receipts" value={money(data?.receipts??0)} tone="green" />
+        <Metric label="Refunds" value={money(data?.refunds??0)} tone="red" />
+        <Metric label="Outstanding" value={money(data?.outstanding??0)} tone="brown" />
+        <Metric label="Ingredient cost" value={money(data?.ingredientCost??0)} tone="brown" />
+        <Metric label="Operational margin" value={money(data?.operationalMargin??0)} tone="green" />
+      </section>
+      <Panel title="Service and origin breakdown"><DataTable rows={data?.breakdown??[]} columns={[["serviceType","Service"],["origin","Origin"],["billedValue","Billed"],["received","Received"],["refunded","Refunded"],["outstanding","Outstanding"],["ingredientCost","Ingredient cost"]]} moneyKeys={["billedValue","received","refunded","outstanding","ingredientCost"]}/></Panel>
+      <Panel title="Export monthly records">
+        <div className="export-grid">
+          {(["orders", "expenses", "summary"] as const).map((kind) => (
+            <button
+              key={kind}
+              onClick={async () => {
+                const path = await window.admin.reports.exportCsv(kind, range);
+                if (path) notify(`Saved ${kind} report.`);
+              }}
+            >
+              <b>{kind}</b>
+              <span>Download CSV -&gt;</span>
+            </button>
+          ))}
+        </div>
+      </Panel>
+    </>
+  );
 }
 
-function MenuPage({notify,previewImages}:{notify:(message:string)=>void;previewImages:(count:number)=>void}){
-  const [catalog,setCatalog]=useState<{categories:CatalogCategory[];items:CatalogItem[]}>({categories:[],items:[]});
-  const [draft,setDraft]=useState<Publication>({mode:"one-day",date:today(),weeklyStartDate:null,published:true,title:"Tomorrow's Fresh Menu",itemIds:[],featuredItemId:null,orderCutoff:"Order before 9:00 PM for next-day delivery"});
-  const [query,setQuery]=useState("");const [hasSaved,setHasSaved]=useState(false);const [exporting,setExporting]=useState(false);
-  useEffect(()=>{Promise.all([window.admin.menu.catalog(),window.admin.menu.getCurrent()]).then(([value,current])=>{setCatalog(value);setHasSaved(Boolean(current));const safe=sanitizePublication(current,value.categories,value.items);if(safe)setDraft(safe);});},[]);
-  const items=catalog.items.filter((item)=>isPublishableItem(item,catalog.categories)&&searchableCatalogItem(item,query));
-  const update=(next:Partial<Publication>)=>setDraft((current)=>({...current,...next}));
-  const toggle=(id:string)=>update({itemIds:draft.itemIds.includes(id)?draft.itemIds.filter((value)=>value!==id):[...draft.itemIds,id],featuredItemId:draft.featuredItemId===id?null:draft.featuredItemId});
-  async function save(){await window.admin.menu.publish(draft);setHasSaved(true);notify(`${draft.mode==="weekly"?"Weekly":"One-day"} menu saved locally. Use Sync Centre to push it to Neon.`);}
-  async function run(action:()=>Promise<any>,success:string){setExporting(true);try{const result=await action();if(result?.canceled)return notify("Menu export was cancelled.");if(result?.imageCount)previewImages(result.imageCount);notify(result?.warning??success);}catch(error){notify(error instanceof Error?error.message:String(error));}finally{setExporting(false);}}
-  return <section className="menu-builder"><div><Panel title={`Build the ${draft.mode==="weekly"?"weekly":"one-day"} menu`}><div className="menu-mode-selector" role="group" aria-label="Active customer menu mode"><button className={draft.mode==="one-day"?"primary":""} onClick={()=>update({mode:"one-day",weeklyStartDate:null})}>One-day</button><button className={draft.mode==="weekly"?"primary":""} onClick={()=>update({mode:"weekly",weeklyStartDate:draft.weeklyStartDate??today()})}>Weekly</button></div><div className="publish-fields"><label>Legacy date metadata<input type="date" value={draft.date} onChange={(event)=>update({date:event.target.value})}/></label>{draft.mode==="weekly"&&<label>Weekly activation date<input required type="date" value={draft.weeklyStartDate??""} onChange={(event)=>update({weeklyStartDate:event.target.value})}/></label>}<label>Title<input value={draft.title} onChange={(event)=>update({title:event.target.value})}/></label><label>Cutoff<input value={draft.orderCutoff} onChange={(event)=>update({orderCutoff:event.target.value})}/></label></div><p className="muted">One-day service dates are always calculated as tomorrow in India. Weekly menus activate on the chosen date and then roll forward daily.</p><input className="search" placeholder="Search the master menu" value={query} onChange={(event)=>setQuery(event.target.value)}/><div className="catalog-grid">{items.map((item)=><label className={draft.itemIds.includes(item.id)?"selected":""} key={item.id}><input type="checkbox" checked={draft.itemIds.includes(item.id)} onChange={()=>toggle(item.id)}/><span><strong>{item.name}</strong><small>{item.portion} / {money(item.price)}</small></span></label>)}</div></Panel></div><aside className="selection-card"><span>{draft.itemIds.length} selected</span><h2>{draft.mode==="weekly"?"Weekly menu":"Tomorrow's menu"}</h2>{draft.itemIds.map((id)=><FeaturedSelectionRow key={id} item={catalog.items.find((value)=>value.id===id)} active={draft.featuredItemId===id} toggle={()=>update({featuredItemId:draft.featuredItemId===id?null:id})}/>) }<div className="menu-save-actions"><button className="primary publish" disabled={!draft.itemIds.length||exporting} onClick={()=>save().catch((error)=>notify(error.message))}>Save as active menu</button><button className="clear-menu" disabled={!draft.itemIds.length||exporting} onClick={()=>update({itemIds:[],featuredItemId:null})}>Clear selections</button></div><button className="pdf-export-menu" disabled={!hasSaved||exporting} onClick={()=>run(window.admin.menu.exportPdf,"Menu PDF saved.")}>Export saved menu PDF</button><button className="pdf-export-menu photo" disabled={!hasSaved||exporting} onClick={()=>run(window.admin.menu.exportPhotoPdf,"Photo menu PDF saved.")}>Export menu PDF with photos</button><button className="pdf-export-menu preview" disabled={!hasSaved||exporting} onClick={()=>run(window.admin.menu.previewImages,"Menu preview generated.")}>Preview saved menu images</button><button className="pdf-export-menu images" disabled={!hasSaved||exporting} onClick={()=>run(window.admin.menu.exportImages,"Menu images saved.")}>Export saved menu images</button><button className="pdf-export-menu whatsapp" disabled={!hasSaved||exporting} onClick={()=>run(window.admin.menu.shareWhatsApp,"Menu opened in WhatsApp and copied to the clipboard.")}>Share saved menu on WhatsApp</button><small>The selected mode becomes the website default after Sync Centre pushes it to Neon.</small></aside></section>;
+function MenuPage({
+  notify,
+  previewImages,
+}: {
+  notify: (message: string) => void;
+  previewImages: (count: number) => void;
+}) {
+  const [catalog, setCatalog] = useState<{
+    categories: CatalogCategory[];
+    items: CatalogItem[];
+  }>({ categories: [], items: [] });
+  const [draft, setDraft] = useState<Publication>({
+    mode: "one-day",
+    date: today(),
+    weeklyStartDate: null,
+    published: true,
+    title: "Tomorrow's Fresh Menu",
+    itemIds: [],
+    featuredItemId: null,
+    orderCutoff: "Order before 9:00 PM for next-day delivery",
+  });
+  const [query, setQuery] = useState("");
+  const [hasSaved, setHasSaved] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => {
+    Promise.all([
+      window.admin.menu.catalog(),
+      window.admin.menu.getCurrent(),
+    ]).then(([value, current]) => {
+      setCatalog(value);
+      setHasSaved(Boolean(current));
+      const safe = sanitizePublication(current, value.categories, value.items);
+      if (safe) setDraft(safe);
+    });
+  }, []);
+  const items = catalog.items.filter(
+    (item) =>
+      isPublishableItem(item, catalog.categories) &&
+      searchableCatalogItem(item, query),
+  );
+  const update = (next: Partial<Publication>) =>
+    setDraft((current) => ({ ...current, ...next }));
+  const toggle = (id: string) =>
+    update({
+      itemIds: draft.itemIds.includes(id)
+        ? draft.itemIds.filter((value) => value !== id)
+        : [...draft.itemIds, id],
+      featuredItemId: draft.featuredItemId === id ? null : draft.featuredItemId,
+    });
+  async function save() {
+    await window.admin.menu.publish(draft);
+    setHasSaved(true);
+    notify(
+      `${draft.mode === "weekly" ? "Weekly" : "One-day"} menu saved locally. Use Sync Centre to push it to Neon.`,
+    );
+  }
+  async function run(action: () => Promise<any>, success: string) {
+    setExporting(true);
+    try {
+      const result = await action();
+      if (result?.canceled) return notify("Menu export was cancelled.");
+      if (result?.imageCount) previewImages(result.imageCount);
+      notify(result?.warning ?? success);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+  return (
+    <section className="menu-builder">
+      <div>
+        <Panel
+          title={`Build the ${draft.mode === "weekly" ? "weekly" : "one-day"} menu`}
+        >
+          <div
+            className="menu-mode-selector"
+            role="group"
+            aria-label="Active customer menu mode"
+          >
+            <button
+              className={draft.mode === "one-day" ? "primary" : ""}
+              onClick={() => update({ mode: "one-day", weeklyStartDate: null })}
+            >
+              One-day
+            </button>
+            <button
+              className={draft.mode === "weekly" ? "primary" : ""}
+              onClick={() =>
+                update({
+                  mode: "weekly",
+                  weeklyStartDate: draft.weeklyStartDate ?? today(),
+                })
+              }
+            >
+              Weekly
+            </button>
+          </div>
+          <div className="publish-fields">
+            <label>
+              Legacy date metadata
+              <input
+                type="date"
+                value={draft.date}
+                onChange={(event) => update({ date: event.target.value })}
+              />
+            </label>
+            {draft.mode === "weekly" && (
+              <label>
+                Weekly activation date
+                <input
+                  required
+                  type="date"
+                  value={draft.weeklyStartDate ?? ""}
+                  onChange={(event) =>
+                    update({ weeklyStartDate: event.target.value })
+                  }
+                />
+              </label>
+            )}
+            <label>
+              Title
+              <input
+                value={draft.title}
+                onChange={(event) => update({ title: event.target.value })}
+              />
+            </label>
+            <label>
+              Cutoff
+              <input
+                value={draft.orderCutoff}
+                onChange={(event) =>
+                  update({ orderCutoff: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <p className="muted">
+            One-day service dates are always calculated as tomorrow in India.
+            Weekly menus activate on the chosen date and then roll forward
+            daily.
+          </p>
+          <input
+            className="search"
+            placeholder="Search the master menu"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="catalog-grid">
+            {items.map((item) => (
+              <label
+                className={draft.itemIds.includes(item.id) ? "selected" : ""}
+                key={item.id}
+              >
+                <input
+                  type="checkbox"
+                  checked={draft.itemIds.includes(item.id)}
+                  onChange={() => toggle(item.id)}
+                />
+                <span>
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.portion} / {money(item.price)}
+                  </small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Panel>
+      </div>
+      <aside className="selection-card">
+        <span>{draft.itemIds.length} selected</span>
+        <h2>{draft.mode === "weekly" ? "Weekly menu" : "Tomorrow's menu"}</h2>
+        {draft.itemIds.map((id) => (
+          <FeaturedSelectionRow
+            key={id}
+            item={catalog.items.find((value) => value.id === id)}
+            active={draft.featuredItemId === id}
+            toggle={() =>
+              update({
+                featuredItemId: draft.featuredItemId === id ? null : id,
+              })
+            }
+          />
+        ))}
+        <div className="menu-save-actions">
+          <button
+            className="primary publish"
+            disabled={!draft.itemIds.length || exporting}
+            onClick={() => save().catch((error) => notify(error.message))}
+          >
+            Save as active menu
+          </button>
+          <button
+            className="clear-menu"
+            disabled={!draft.itemIds.length || exporting}
+            onClick={() => update({ itemIds: [], featuredItemId: null })}
+          >
+            Clear selections
+          </button>
+        </div>
+        <button
+          className="pdf-export-menu"
+          disabled={!hasSaved || exporting}
+          onClick={() => run(window.admin.menu.exportPdf, "Menu PDF saved.")}
+        >
+          Export saved menu PDF
+        </button>
+        <button
+          className="pdf-export-menu photo"
+          disabled={!hasSaved || exporting}
+          onClick={() =>
+            run(window.admin.menu.exportPhotoPdf, "Photo menu PDF saved.")
+          }
+        >
+          Export menu PDF with photos
+        </button>
+        <button
+          className="pdf-export-menu preview"
+          disabled={!hasSaved || exporting}
+          onClick={() =>
+            run(window.admin.menu.previewImages, "Menu preview generated.")
+          }
+        >
+          Preview saved menu images
+        </button>
+        <button
+          className="pdf-export-menu images"
+          disabled={!hasSaved || exporting}
+          onClick={() =>
+            run(window.admin.menu.exportImages, "Menu images saved.")
+          }
+        >
+          Export saved menu images
+        </button>
+        <button
+          className="pdf-export-menu whatsapp"
+          disabled={!hasSaved || exporting}
+          onClick={() =>
+            run(
+              window.admin.menu.shareWhatsApp,
+              "Menu opened in WhatsApp and copied to the clipboard.",
+            )
+          }
+        >
+          Share saved menu on WhatsApp
+        </button>
+        <small>
+          The selected mode becomes the website default after Sync Centre pushes
+          it to Neon.
+        </small>
+      </aside>
+    </section>
+  );
 }
 
-function PreviousMenuPage({ notify, previewImages }: { notify: (message: string) => void; previewImages: (count:number) => void }) {
-  const [catalog, setCatalog] = useState<{categories:CatalogCategory[];items:CatalogItem[]}>({ categories: [], items: [] });
-  const [selected, setSelected] = useState<string[]>([]); const [featured, setFeatured] = useState<string | null>(null); const [date, setDate] = useState(today()); const [mode,setMode]=useState<"one-day"|"weekly">("one-day"); const [weeklyStartDate,setWeeklyStartDate]=useState(today()); const [title, setTitle] = useState("Tomorrow's Fresh Menu"); const [cutoff, setCutoff] = useState("Order before 9:00 PM for next-day delivery"); const [query, setQuery] = useState(""); const [hasSaved,setHasSaved]=useState(false); const [exporting,setExporting]=useState<"compact"|"photo"|"images"|"preview"|"whatsapp"|null>(null);
-  useEffect(() => { Promise.all([window.admin.menu.catalog(), window.admin.menu.getCurrent()]).then(([value,current]) => { setCatalog(value); setHasSaved(Boolean(current)); const safe=sanitizePublication(current,value.categories,value.items); if(safe){setDate(safe.date);setMode(safe.mode??"one-day");setWeeklyStartDate(safe.weeklyStartDate??today());setTitle(safe.title);setCutoff(safe.orderCutoff);setSelected(safe.itemIds);setFeatured(safe.featuredItemId);} }); }, []);
-  const items=catalog.items.filter((item)=>isPublishableItem(item,catalog.categories)&&searchableCatalogItem(item,query));
-  async function publish(){const payload:Publication={mode,date,weeklyStartDate:mode==="weekly"?weeklyStartDate:null,published:true,title,itemIds:selected,featuredItemId:featured,orderCutoff:cutoff};await window.admin.menu.publish(payload);setHasSaved(true);notify(`${mode==="weekly"?"Weekly":"One-day"} menu saved locally. Use Sync Centre to push it to Neon.`);}
-  async function exportPdf(kind:"compact"|"photo"){setExporting(kind);try{const result=kind==="photo"?await window.admin.menu.exportPhotoPdf():await window.admin.menu.exportPdf();if(result.canceled){notify("One-day menu PDF export was cancelled.");return;}notify(result.warning??`One-day menu PDF saved successfully (${result.pageCount} ${result.pageCount===1?"page":"pages"}).`);}catch(error){notify(`One-day menu PDF export failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function exportImages(){setExporting("images");try{const result=await window.admin.menu.exportImages();if(result.canceled){notify("One-day menu image export was cancelled.");return;}notify(result.warning??`Saved ${result.imageCount} menu ${result.imageCount===1?"image":"images"}.`);previewImages(result.imageCount);}catch(error){notify(`One-day menu image export failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function previewMenuImages(){setExporting("preview");try{const result=await window.admin.menu.previewImages();notify(result.warning??"One-day menu preview generated.");previewImages(result.imageCount);}catch(error){notify(`One-day menu preview failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function shareWhatsApp(){setExporting("whatsapp");try{await window.admin.menu.shareWhatsApp();notify("Menu opened in WhatsApp and copied to the clipboard as a backup.");}catch(error){notify(`WhatsApp sharing failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  function clearSelections(){setSelected([]);setFeatured(null);notify("Current menu selections cleared. Save locally to replace the saved menu.");}
-  return <section className="menu-builder"><div><Panel title="Build the one-day menu"><div className="publish-fields"><label>Service date<input type="date" value={date} onChange={(event)=>setDate(event.target.value)}/></label><label>Title<input value={title} onChange={(event)=>setTitle(event.target.value)}/></label><label>Cutoff<input value={cutoff} onChange={(event)=>setCutoff(event.target.value)}/></label></div><input className="search" placeholder="Search the master menu" value={query} onChange={(event)=>setQuery(event.target.value)}/><div className="catalog-grid">{items.map((item)=><label className={selected.includes(item.id)?"selected":""} key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={()=>setSelected((current)=>current.includes(item.id)?current.filter((id)=>id!==item.id):[...current,item.id])}/><span><strong>{item.name}</strong><small>{item.portion} / {money(item.price)}</small></span></label>)}</div></Panel></div><aside className="selection-card"><span>{selected.length} selected</span><h2>Tomorrow's menu</h2>{selected.map((id)=>{const item=catalog.items.find((value)=>value.id===id);return <FeaturedSelectionRow key={id} item={item} active={featured===id} toggle={()=>setFeatured(featured===id?null:id)}/>;})}<div className="menu-save-actions"><button className="primary publish" disabled={!selected.length||Boolean(exporting)} onClick={()=>publish().catch((error)=>notify(error.message))}>Save menu locally</button><button className="clear-menu" disabled={!selected.length||Boolean(exporting)} onClick={clearSelections}>Clear selections</button></div><button className="pdf-export-menu" disabled={!hasSaved||Boolean(exporting)} onClick={()=>exportPdf("compact")}>{exporting==="compact"?"Generating PDF...":"Export saved menu PDF"}</button><button className="pdf-export-menu photo" disabled={!hasSaved||Boolean(exporting)} onClick={()=>exportPdf("photo")}>{exporting==="photo"?"Generating photo PDF...":"Export menu PDF with photos"}</button><button className="pdf-export-menu preview" disabled={!hasSaved||Boolean(exporting)} onClick={previewMenuImages}>{exporting==="preview"?"Generating preview...":"Preview saved menu images"}</button><button className="pdf-export-menu images" disabled={!hasSaved||Boolean(exporting)} onClick={exportImages}>{exporting==="images"?"Generating images...":"Export saved menu images"}</button><button className="pdf-export-menu whatsapp" disabled={!hasSaved||Boolean(exporting)} onClick={shareWhatsApp}>{exporting==="whatsapp"?"Opening WhatsApp...":"Share saved menu on WhatsApp"}</button><small>Use the star to choose Today's Special. All exports use the latest locally saved menu.</small></aside></section>;
+function PreviousMenuPage({
+  notify,
+  previewImages,
+}: {
+  notify: (message: string) => void;
+  previewImages: (count: number) => void;
+}) {
+  const [catalog, setCatalog] = useState<{
+    categories: CatalogCategory[];
+    items: CatalogItem[];
+  }>({ categories: [], items: [] });
+  const [selected, setSelected] = useState<string[]>([]);
+  const [featured, setFeatured] = useState<string | null>(null);
+  const [date, setDate] = useState(today());
+  const [mode, setMode] = useState<"one-day" | "weekly">("one-day");
+  const [weeklyStartDate, setWeeklyStartDate] = useState(today());
+  const [title, setTitle] = useState("Tomorrow's Fresh Menu");
+  const [cutoff, setCutoff] = useState(
+    "Order before 9:00 PM for next-day delivery",
+  );
+  const [query, setQuery] = useState("");
+  const [hasSaved, setHasSaved] = useState(false);
+  const [exporting, setExporting] = useState<
+    "compact" | "photo" | "images" | "preview" | "whatsapp" | null
+  >(null);
+  useEffect(() => {
+    Promise.all([
+      window.admin.menu.catalog(),
+      window.admin.menu.getCurrent(),
+    ]).then(([value, current]) => {
+      setCatalog(value);
+      setHasSaved(Boolean(current));
+      const safe = sanitizePublication(current, value.categories, value.items);
+      if (safe) {
+        setDate(safe.date);
+        setMode(safe.mode ?? "one-day");
+        setWeeklyStartDate(safe.weeklyStartDate ?? today());
+        setTitle(safe.title);
+        setCutoff(safe.orderCutoff);
+        setSelected(safe.itemIds);
+        setFeatured(safe.featuredItemId);
+      }
+    });
+  }, []);
+  const items = catalog.items.filter(
+    (item) =>
+      isPublishableItem(item, catalog.categories) &&
+      searchableCatalogItem(item, query),
+  );
+  async function publish() {
+    const payload: Publication = {
+      mode,
+      date,
+      weeklyStartDate: mode === "weekly" ? weeklyStartDate : null,
+      published: true,
+      title,
+      itemIds: selected,
+      featuredItemId: featured,
+      orderCutoff: cutoff,
+    };
+    await window.admin.menu.publish(payload);
+    setHasSaved(true);
+    notify(
+      `${mode === "weekly" ? "Weekly" : "One-day"} menu saved locally. Use Sync Centre to push it to Neon.`,
+    );
+  }
+  async function exportPdf(kind: "compact" | "photo") {
+    setExporting(kind);
+    try {
+      const result =
+        kind === "photo"
+          ? await window.admin.menu.exportPhotoPdf()
+          : await window.admin.menu.exportPdf();
+      if (result.canceled) {
+        notify("One-day menu PDF export was cancelled.");
+        return;
+      }
+      notify(
+        result.warning ??
+          `One-day menu PDF saved successfully (${result.pageCount} ${result.pageCount === 1 ? "page" : "pages"}).`,
+      );
+    } catch (error) {
+      notify(
+        `One-day menu PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function exportImages() {
+    setExporting("images");
+    try {
+      const result = await window.admin.menu.exportImages();
+      if (result.canceled) {
+        notify("One-day menu image export was cancelled.");
+        return;
+      }
+      notify(
+        result.warning ??
+          `Saved ${result.imageCount} menu ${result.imageCount === 1 ? "image" : "images"}.`,
+      );
+      previewImages(result.imageCount);
+    } catch (error) {
+      notify(
+        `One-day menu image export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function previewMenuImages() {
+    setExporting("preview");
+    try {
+      const result = await window.admin.menu.previewImages();
+      notify(result.warning ?? "One-day menu preview generated.");
+      previewImages(result.imageCount);
+    } catch (error) {
+      notify(
+        `One-day menu preview failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function shareWhatsApp() {
+    setExporting("whatsapp");
+    try {
+      await window.admin.menu.shareWhatsApp();
+      notify(
+        "Menu opened in WhatsApp and copied to the clipboard as a backup.",
+      );
+    } catch (error) {
+      notify(
+        `WhatsApp sharing failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  function clearSelections() {
+    setSelected([]);
+    setFeatured(null);
+    notify(
+      "Current menu selections cleared. Save locally to replace the saved menu.",
+    );
+  }
+  return (
+    <section className="menu-builder">
+      <div>
+        <Panel title="Build the one-day menu">
+          <div className="publish-fields">
+            <label>
+              Service date
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </label>
+            <label>
+              Title
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label>
+              Cutoff
+              <input
+                value={cutoff}
+                onChange={(event) => setCutoff(event.target.value)}
+              />
+            </label>
+          </div>
+          <input
+            className="search"
+            placeholder="Search the master menu"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="catalog-grid">
+            {items.map((item) => (
+              <label
+                className={selected.includes(item.id) ? "selected" : ""}
+                key={item.id}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(item.id)
+                        ? current.filter((id) => id !== item.id)
+                        : [...current, item.id],
+                    )
+                  }
+                />
+                <span>
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.portion} / {money(item.price)}
+                  </small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Panel>
+      </div>
+      <aside className="selection-card">
+        <span>{selected.length} selected</span>
+        <h2>Tomorrow's menu</h2>
+        {selected.map((id) => {
+          const item = catalog.items.find((value) => value.id === id);
+          return (
+            <FeaturedSelectionRow
+              key={id}
+              item={item}
+              active={featured === id}
+              toggle={() => setFeatured(featured === id ? null : id)}
+            />
+          );
+        })}
+        <div className="menu-save-actions">
+          <button
+            className="primary publish"
+            disabled={!selected.length || Boolean(exporting)}
+            onClick={() => publish().catch((error) => notify(error.message))}
+          >
+            Save menu locally
+          </button>
+          <button
+            className="clear-menu"
+            disabled={!selected.length || Boolean(exporting)}
+            onClick={clearSelections}
+          >
+            Clear selections
+          </button>
+        </div>
+        <button
+          className="pdf-export-menu"
+          disabled={!hasSaved || Boolean(exporting)}
+          onClick={() => exportPdf("compact")}
+        >
+          {exporting === "compact"
+            ? "Generating PDF..."
+            : "Export saved menu PDF"}
+        </button>
+        <button
+          className="pdf-export-menu photo"
+          disabled={!hasSaved || Boolean(exporting)}
+          onClick={() => exportPdf("photo")}
+        >
+          {exporting === "photo"
+            ? "Generating photo PDF..."
+            : "Export menu PDF with photos"}
+        </button>
+        <button
+          className="pdf-export-menu preview"
+          disabled={!hasSaved || Boolean(exporting)}
+          onClick={previewMenuImages}
+        >
+          {exporting === "preview"
+            ? "Generating preview..."
+            : "Preview saved menu images"}
+        </button>
+        <button
+          className="pdf-export-menu images"
+          disabled={!hasSaved || Boolean(exporting)}
+          onClick={exportImages}
+        >
+          {exporting === "images"
+            ? "Generating images..."
+            : "Export saved menu images"}
+        </button>
+        <button
+          className="pdf-export-menu whatsapp"
+          disabled={!hasSaved || Boolean(exporting)}
+          onClick={shareWhatsApp}
+        >
+          {exporting === "whatsapp"
+            ? "Opening WhatsApp..."
+            : "Share saved menu on WhatsApp"}
+        </button>
+        <small>
+          Use the star to choose Today's Special. All exports use the latest
+          locally saved menu.
+        </small>
+      </aside>
+    </section>
+  );
 }
 
-function FeaturedSelectionRow({item,active,toggle}:{item:CatalogItem|undefined;active:boolean;toggle():void}){const name=item?.name??"Selected item";const action=active?`Clear ${name} as Today's Special`:`Set ${name} as Today's Special`;return <div className={active?"selected-line featured":"selected-line"}><button type="button" className={active?"star on":"star"} aria-label={action} aria-pressed={active} title={action} onClick={toggle}>{"\u2605"}</button><span className="selected-item-name"><strong>{name}</strong>{active&&<small>Today's Special</small>}</span><b>{money(item?.price??0)}</b></div>}
+function FeaturedSelectionRow({
+  item,
+  active,
+  toggle,
+}: {
+  item: CatalogItem | undefined;
+  active: boolean;
+  toggle(): void;
+}) {
+  const name = item?.name ?? "Selected item";
+  const action = active
+    ? `Clear ${name} as Today's Special`
+    : `Set ${name} as Today's Special`;
+  return (
+    <div className={active ? "selected-line featured" : "selected-line"}>
+      <button
+        type="button"
+        className={active ? "star on" : "star"}
+        aria-label={action}
+        aria-pressed={active}
+        title={action}
+        onClick={toggle}
+      >
+        {"\u2605"}
+      </button>
+      <span className="selected-item-name">
+        <strong>{name}</strong>
+        {active && <small>Today's Special</small>}
+      </span>
+      <b>{money(item?.price ?? 0)}</b>
+    </div>
+  );
+}
 
 function LegacyMenuPage({ notify }: { notify: (message: string) => void }) {
-  const [catalog, setCatalog] = useState<any>({ categories: [], items: [] }); const [selected, setSelected] = useState<string[]>([]); const [featured, setFeatured] = useState<string | null>(null); const [date, setDate] = useState(today()); const [title, setTitle] = useState("Tomorrow's Fresh Menu"); const [cutoff, setCutoff] = useState("Order before 9:00 PM for next-day delivery"); const [query, setQuery] = useState("");
-  useEffect(() => { Promise.all([window.admin.menu.catalog(), window.admin.menu.getCurrent()]).then(([value, current]) => { setCatalog(value); if (current) { setDate(current.date); setTitle(current.title); setCutoff(current.orderCutoff); setSelected(current.itemIds); setFeatured(current.featuredItemId); } }); }, []);
-  const items = catalog.items.filter((item: any) => item.available && item.name.toLowerCase().includes(query.toLowerCase()));
-  async function publish() { const incompatible = selected.filter((id) => !catalog.items.find((item: any) => item.id === id)?.webCompatible); if (incompatible.length) throw new Error("Remove items that are not compatible with the website catalog."); const payload: Publication = { mode:"one-day", date, weeklyStartDate:null, published: true, title, itemIds: selected, featuredItemId: featured, orderCutoff: cutoff }; await window.admin.menu.publish(payload); notify("Menu saved locally. Use Sync Centre to push it to Neon."); }
-  return <section className="menu-builder"><div><Panel title="Build the one-day menu"><div className="publish-fields"><label>Service date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Cutoff<input value={cutoff} onChange={(event) => setCutoff(event.target.value)} /></label></div><input className="search" placeholder="Search the master menu" value={query} onChange={(event) => setQuery(event.target.value)} /><div className="catalog-grid">{items.map((item: any) => <label className={selected.includes(item.id) ? "selected" : ""} key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => setSelected((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /><span><strong>{item.name}</strong><small>{item.portion} / {money(item.price)}</small></span></label>)}</div></Panel></div>
-    <aside className="selection-card"><span>{selected.length} selected</span><h2>Tomorrow's menu</h2>{selected.map((id) => { const item = catalog.items.find((value: any) => value.id === id); return <div className="selected-line" key={id}><button className={featured === id ? "star on" : "star"} onClick={() => setFeatured(featured === id ? null : id)}>*</button><span>{item?.name}</span><b>{money(item?.price)}</b></div>; })}<button className="primary publish" disabled={!selected.length} onClick={() => publish().catch((error) => notify(error.message))}>Save menu locally</button><small>* marks the featured dish. Push the queued publication from Sync Centre.</small></aside>
-  </section>;
+  const [catalog, setCatalog] = useState<any>({ categories: [], items: [] });
+  const [selected, setSelected] = useState<string[]>([]);
+  const [featured, setFeatured] = useState<string | null>(null);
+  const [date, setDate] = useState(today());
+  const [title, setTitle] = useState("Tomorrow's Fresh Menu");
+  const [cutoff, setCutoff] = useState(
+    "Order before 9:00 PM for next-day delivery",
+  );
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    Promise.all([
+      window.admin.menu.catalog(),
+      window.admin.menu.getCurrent(),
+    ]).then(([value, current]) => {
+      setCatalog(value);
+      if (current) {
+        setDate(current.date);
+        setTitle(current.title);
+        setCutoff(current.orderCutoff);
+        setSelected(current.itemIds);
+        setFeatured(current.featuredItemId);
+      }
+    });
+  }, []);
+  const items = catalog.items.filter(
+    (item: any) =>
+      item.available && item.name.toLowerCase().includes(query.toLowerCase()),
+  );
+  async function publish() {
+    const incompatible = selected.filter(
+      (id) => !catalog.items.find((item: any) => item.id === id)?.webCompatible,
+    );
+    if (incompatible.length)
+      throw new Error(
+        "Remove items that are not compatible with the website catalog.",
+      );
+    const payload: Publication = {
+      mode: "one-day",
+      date,
+      weeklyStartDate: null,
+      published: true,
+      title,
+      itemIds: selected,
+      featuredItemId: featured,
+      orderCutoff: cutoff,
+    };
+    await window.admin.menu.publish(payload);
+    notify("Menu saved locally. Use Sync Centre to push it to Neon.");
+  }
+  return (
+    <section className="menu-builder">
+      <div>
+        <Panel title="Build the one-day menu">
+          <div className="publish-fields">
+            <label>
+              Service date
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </label>
+            <label>
+              Title
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </label>
+            <label>
+              Cutoff
+              <input
+                value={cutoff}
+                onChange={(event) => setCutoff(event.target.value)}
+              />
+            </label>
+          </div>
+          <input
+            className="search"
+            placeholder="Search the master menu"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="catalog-grid">
+            {items.map((item: any) => (
+              <label
+                className={selected.includes(item.id) ? "selected" : ""}
+                key={item.id}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(item.id)
+                        ? current.filter((id) => id !== item.id)
+                        : [...current, item.id],
+                    )
+                  }
+                />
+                <span>
+                  <strong>{item.name}</strong>
+                  <small>
+                    {item.portion} / {money(item.price)}
+                  </small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Panel>
+      </div>
+      <aside className="selection-card">
+        <span>{selected.length} selected</span>
+        <h2>Tomorrow's menu</h2>
+        {selected.map((id) => {
+          const item = catalog.items.find((value: any) => value.id === id);
+          return (
+            <div className="selected-line" key={id}>
+              <button
+                className={featured === id ? "star on" : "star"}
+                onClick={() => setFeatured(featured === id ? null : id)}
+              >
+                *
+              </button>
+              <span>{item?.name}</span>
+              <b>{money(item?.price)}</b>
+            </div>
+          );
+        })}
+        <button
+          className="primary publish"
+          disabled={!selected.length}
+          onClick={() => publish().catch((error) => notify(error.message))}
+        >
+          Save menu locally
+        </button>
+        <small>
+          * marks the featured dish. Push the queued publication from Sync
+          Centre.
+        </small>
+      </aside>
+    </section>
+  );
 }
 
-function UnifiedOrdersPage({notify,initialTab,prefillCustomerId,clearPrefill}:{notify:(message:string)=>void;initialTab:"all"|"online"|"manual";prefillCustomerId:string|null;clearPrefill():void}){
-  const [kind,setKind]=useState(initialTab);const [range,setRange]=useState(monthRange);const [query,setQuery]=useState("");const [source,setSource]=useState("");const [sources,setSources]=useState<OrderingSource[]>([]);const [rows,setRows]=useState<UnifiedOrderSummary[]>([]);const [detail,setDetail]=useState<UnifiedOrderDetail|null>(null);const [form,setForm]=useState(false);const [editing,setEditing]=useState<UnifiedOrderDetail|null>(null);
-  const load=()=>window.admin.orders.listUnified({kind,range,search:query,source}).then(setRows);useEffect(()=>{load();},[kind,range.from,range.to,query,source]);useEffect(()=>{window.admin.orders.sources().then(setSources);},[]);useEffect(()=>{if(prefillCustomerId){setKind("manual");setForm(true);setTimeout(clearPrefill,0);}},[prefillCustomerId]);
-  async function select(row:UnifiedOrderSummary){setDetail(await window.admin.orders.detail(row.kind,row.id));}
-  async function setStatus(row:UnifiedOrderSummary,value:any){if(row.kind==="online")await window.admin.cloudOrders.updateStatus(row.id,value);else await window.admin.orders.updateStatus(row.id,value);await load();if(detail?.id===row.id)setDetail(await window.admin.orders.detail(row.kind,row.id));notify(row.kind==="online"?"Online status queued for Sync Centre.":"Manual order status updated locally.");}
-  const statusOptions=(row:UnifiedOrderSummary)=>row.kind==="online"?["handoff_created","customer_confirmed_sent","confirmed","preparing","ready","completed","cancelled"]:["draft","confirmed","preparing","ready","completed","cancelled"];
-  return <><div className="order-tabs" role="tablist">{(["all","online","manual"] as const).map((value)=><button role="tab" aria-selected={kind===value} className={kind===value?"active":""} onClick={()=>{setKind(value);setDetail(null);}} key={value}>{value==="all"?"All Orders":value==="online"?"Online Orders":"Manual Orders"}</button>)}</div><div className="unified-order-toolbar"><DateFilter range={range} setRange={setRange}/><input className="search" placeholder="Search customer, phone, email, source or item" value={query} onChange={(event)=>setQuery(event.target.value)}/><select value={source} onChange={(event)=>setSource(event.target.value)}><option value="">All sources</option><option value="website">Website</option>{sources.map((entry)=><option key={entry.id} value={entry.id}>{entry.name}</option>)}</select>{kind!=="online"&&<button className="primary" onClick={()=>{setEditing(null);setForm(true);}}>+ New manual order</button>}</div><section className="split wide-left"><Panel title={`${kind==="all"?"All":kind==="online"?"Online":"Manual"} orders`}><div className="order-list">{rows.map((row)=><article className={`unified-order ${row.kind}`} key={`${row.kind}-${row.id}`}><span className={`order-kind ${row.kind}`}>{row.kind}</span><div><strong>{row.customerName||row.phone}</strong><span>{row.reference} / {row.serviceDate} / {row.sourceName}</span></div><b>{money(row.total)}</b><select value={row.status} onChange={(event)=>setStatus(row,event.target.value)}>{statusOptions(row).map((value)=><option key={value}>{value}</option>)}</select><button onClick={()=>select(row)}>View</button></article>)}{!rows.length&&<Empty text="No orders match these filters."/>}</div></Panel><Panel title="Order detail">{detail?<div className="detail-card"><span className={`order-kind ${detail.kind}`}>{detail.kind}</span><b>{detail.reference}</b><span>{detail.customerName} / {detail.phone}{detail.email?` / ${detail.email}`:""}</span><span>{detail.fulfilment} / {detail.serviceDate} / {detail.sourceName}</span>{detail.address&&<span>{detail.address}</span>}<div className="order-detail-lines">{detail.lines.map((line)=><article key={line.id}><div><strong>{line.name}</strong><span>{line.quantity} x {money(line.unitPrice)}</span></div><b>{money(line.lineTotal)}</b></article>)}</div><footer><span>Order total</span><strong>{money(detail.total)}</strong></footer>{detail.kind==="manual"&&<div className="detail-actions"><button onClick={()=>{setEditing(detail);setForm(true);}}>Edit order</button><button disabled={detail.paid>=detail.total} onClick={async()=>{const value=prompt("Payment amount",String(Math.max(0,detail.total-detail.paid)));if(!value)return;await window.admin.orders.addPayment({orderId:detail.id,amount:Number(value),receivedAt:new Date().toISOString(),method:"UPI",status:"received"});setDetail(await window.admin.orders.detail("manual",detail.id));load();notify("Payment recorded locally.");}}>Record payment</button></div>}</div>:<Empty text="Select an order to inspect it."/>}</Panel></section>{form&&<ManualOrderModal edit={editing} prefillCustomerId={prefillCustomerId} sources={sources} close={()=>{setForm(false);setEditing(null);}} saved={async()=>{setForm(false);setEditing(null);await load();notify("Manual order saved locally. Only its customer profile is queued for synchronization.");}} notify={notify}/>}</>;
+function UnifiedOrdersPage({
+  notify,
+  initialTab,
+  prefillCustomerId,
+  clearPrefill,
+}: {
+  notify: (message: string) => void;
+  initialTab: "all" | "online" | "manual";
+  prefillCustomerId: string | null;
+  clearPrefill(): void;
+}) {
+  const [kind, setKind] = useState(initialTab);
+  const [range, setRange] = useState(monthRange);
+  const [query, setQuery] = useState("");
+  const [source, setSource] = useState("");
+  const [sources, setSources] = useState<OrderingSource[]>([]);
+  const [rows, setRows] = useState<UnifiedOrderSummary[]>([]);
+  const [detail, setDetail] = useState<UnifiedOrderDetail | null>(null);
+  const [form, setForm] = useState(false);
+  const [editing, setEditing] = useState<UnifiedOrderDetail | null>(null);
+  const [paymentDraft, setPaymentDraft] = useState<{direction:"received"|"refunded";amount:string;method:string;notes:string}|null>(null);
+  const load = () =>
+    window.admin.orders
+      .listUnified({ kind, range, search: query, source })
+      .then(setRows);
+  useEffect(() => {
+    load();
+  }, [kind, range.from, range.to, query, source]);
+  useEffect(() => {
+    window.admin.orders.sources().then(setSources);
+  }, []);
+  useEffect(() => {
+    if (prefillCustomerId) {
+      setKind("manual");
+      setForm(true);
+      setTimeout(clearPrefill, 0);
+    }
+  }, [prefillCustomerId]);
+  async function select(row: UnifiedOrderSummary) {
+    setDetail(await window.admin.orders.detail(row.kind, row.id));
+  }
+  async function setStatus(row: UnifiedOrderSummary, value: any) {
+    if (row.kind === "online")
+      await window.admin.cloudOrders.updateStatus(row.id, value);
+    else {
+      try {
+        await window.admin.orders.updateStatus(row.id, value);
+      } catch (error) {
+        if (
+          value !== "preparing" ||
+          !String(error).includes("Insufficient stock")
+        )
+          throw error;
+        const reason = prompt(
+          `${String(error)}\n\nEnter an audited override reason to continue:`,
+        );
+        if (!reason) return;
+        await window.admin.orders.updateStatus(row.id, value, reason);
+      }
+    }
+    await load();
+    if (detail?.id === row.id)
+      setDetail(await window.admin.orders.detail(row.kind, row.id));
+    notify(
+      row.kind === "online"
+        ? "Online status queued for Sync Centre."
+        : "Manual order status updated locally.",
+    );
+  }
+  const statusLabel=(value:string)=>({draft:"Draft",awaiting_review:"Awaiting review",confirmed:"Confirmed",preparing:"Preparing",ready:"Ready",completed:"Completed",cancelled:"Cancelled"}[value]??value);
+  const statusOptions = (row: UnifiedOrderSummary) => {
+    if(["completed","cancelled"].includes(row.status))return[row.status];
+    const sequence=row.kind==="online"?["awaiting_review","confirmed","preparing","ready","completed"]:["draft","confirmed","preparing","ready","completed"];
+    const current=Math.max(0,sequence.indexOf(row.status));
+    return[sequence[current],sequence[current+1],"cancelled"].filter((value,index,values):value is string=>Boolean(value)&&values.indexOf(value)===index);
+  };
+  return (
+    <>
+      <div className="order-tabs" role="tablist">
+        {(["all", "online", "manual"] as const).map((value) => (
+          <button
+            role="tab"
+            aria-selected={kind === value}
+            className={kind === value ? "active" : ""}
+            onClick={() => {
+              setKind(value);
+              setDetail(null);
+            }}
+            key={value}
+          >
+            {value === "all"
+              ? "All Orders"
+              : value === "online"
+                ? "Online Orders"
+                : "Manual Orders"}
+          </button>
+        ))}
+      </div>
+      <div className="unified-order-toolbar">
+        <DateFilter range={range} setRange={setRange} />
+        <input
+          className="search"
+          placeholder="Search customer, phone, email, source or item"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          value={source}
+          onChange={(event) => setSource(event.target.value)}
+        >
+          <option value="">All sources</option>
+          <option value="website">Website</option>
+          {sources.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+        </select>
+        {kind !== "online" && (
+          <button
+            className="primary"
+            onClick={() => {
+              setEditing(null);
+              setForm(true);
+            }}
+          >
+            + New manual order
+          </button>
+        )}
+      </div>
+      <section className="split wide-left">
+        <Panel
+          title={`${kind === "all" ? "All" : kind === "online" ? "Online" : "Manual"} orders`}
+        >
+          <div className="order-list">
+            {rows.map((row) => (
+              <article
+                className={`unified-order ${row.kind}`}
+                key={`${row.kind}-${row.id}`}
+              >
+                <span className={`order-kind ${row.kind}`}>{row.kind}</span>
+                <div>
+                  <strong>{row.customerName || row.phone}</strong>
+                  <span>
+                    {row.reference} / {row.serviceDate} / {row.sourceName}
+                  </span>
+                  {row.kind==="online"&&<span>Handoff: {row.handoffStatus==="customer_confirmed"?"Customer confirmed WhatsApp":"WhatsApp handoff created"}{row.pendingSync?" / Pending Sync Centre":""}</span>}
+                </div>
+                <b>{money(row.total)}</b>
+                <select
+                  value={row.status}
+                  onChange={(event) => setStatus(row, event.target.value)}
+                >
+                  {statusOptions(row).map((value) => (
+                    <option key={value} value={value}>{statusLabel(value)}</option>
+                  ))}
+                </select>
+                <button onClick={() => select(row)}>View</button>
+              </article>
+            ))}
+            {!rows.length && <Empty text="No orders match these filters." />}
+          </div>
+        </Panel>
+        <Panel title="Order detail">
+          {detail ? (
+            <div className="detail-card">
+              <span className={`order-kind ${detail.kind}`}>{detail.kind}</span>
+              <b>{detail.reference}</b>
+              {detail.kind==="online"&&<span className="order-handoff-state">Handoff: {detail.handoffStatus==="customer_confirmed"?"Customer confirmed WhatsApp":"WhatsApp handoff created"}{detail.pendingSync?" / Operational status pending Sync Centre":""}</span>}
+              <span>
+                {detail.customerName} / {detail.phone}
+                {detail.email ? ` / ${detail.email}` : ""}
+              </span>
+              <span>
+                {detail.fulfilment} / {detail.serviceDate} / {detail.sourceName}
+              </span>
+              {detail.address && <span>{detail.address}</span>}
+              {(detail.serviceType==="party"||detail.serviceType==="bulk")&&<section className="service-details"><h3>{detail.serviceType==="party"?"Party":"Bulk"} requirements</h3><span>{detail.serviceDetails.occasion||"No occasion specified"} / {detail.serviceDetails.guestCount} guests or meals</span>{detail.serviceDetails.dietary&&<span>Dietary: {detail.serviceDetails.dietary}</span>}{detail.serviceDetails.packaging&&<span>Packaging: {detail.serviceDetails.packaging}</span>}</section>}
+              <div className="order-detail-lines">
+                {detail.lines.map((line) => (
+                  <article key={line.id}>
+                    <div>
+                      <strong>{line.name}</strong>
+                      <span>
+                        {line.quantity} x {money(line.unitPrice)}
+                      </span>
+                    </div>
+                    <b>{money(line.lineTotal)}</b>
+                  </article>
+                ))}
+              </div>
+              <footer>
+                <span>Order total</span>
+                <strong>{money(detail.total)}</strong>
+              </footer>
+              <section className="payment-ledger" aria-label="Payment ledger">
+                <h3>Payment ledger</h3>
+                <div className="ledger-summary"><span>Received <b>{money(detail.paid)}</b></span><span>Refunded <b>{money(detail.refunded)}</b></span><span>Outstanding <b>{money(detail.outstanding)}</b></span></div>
+                <div className="ledger-list">{detail.payments.map((payment:any)=><span key={payment.id}><b>{payment.direction === "refunded" ? "Refund" : "Receipt"} {money(payment.amount)}</b> / {new Date(payment.occurred_at).toLocaleString()} / {payment.method}{payment.notes ? ` / ${payment.notes}` : ""}</span>)}{!detail.payments.length&&<small>No payment entries yet.</small>}</div>
+              </section>
+              <div className="detail-actions">
+                {["confirmed","ready","cancelled"].includes(detail.status)&&<button className="button button-primary" onClick={()=>window.admin.orders.openWhatsApp(detail.kind,detail.id).then(async()=>{setDetail(await window.admin.orders.detail(detail.kind,detail.id));notify("WhatsApp opened. Delivery is not confirmed.");}).catch(error=>notify(error.message))}>Open {statusLabel(detail.status)} WhatsApp</button>}
+                {detail.kind === "manual" && (
+                  <button className="button button-outline"
+                    onClick={() => {
+                      setEditing(detail);
+                      setForm(true);
+                    }}
+                  >Edit order</button>
+                )}
+                <button className="button button-primary" disabled={detail.outstanding<=0} onClick={()=>setPaymentDraft({direction:"received",amount:String(detail.outstanding),method:"UPI",notes:""})}>Record receipt</button>
+                <button className="button button-outline" disabled={detail.paid-detail.refunded<=0} onClick={()=>setPaymentDraft({direction:"refunded",amount:"",method:"UPI",notes:""})}>Record refund</button>
+              </div>
+              <section className="order-contact-history"><h3>Customer contact</h3>{detail.contactEvents.map(event=><span key={event.id}>WhatsApp opened for {statusLabel(event.milestone)} / {new Date(event.openedAt).toLocaleString()}</span>)}{!detail.contactEvents.length&&<small>No customer milestone message has been opened.</small>}</section>
+              <section className="order-contact-history"><h3>Status history</h3>{detail.statusEvents.map(event=><span key={event.id}>{statusLabel(event.previousStatus)} to {statusLabel(event.nextStatus)} / {new Date(event.changedAt).toLocaleString()}</span>)}{!detail.statusEvents.length&&<small>No local operational status changes yet.</small>}</section>
+            </div>
+          ) : (
+            <Empty text="Select an order to inspect it." />
+          )}
+        </Panel>
+      </section>
+      {form && (
+        <ManualOrderModal
+          edit={editing}
+          prefillCustomerId={prefillCustomerId}
+          sources={sources}
+          close={() => {
+            setForm(false);
+            setEditing(null);
+          }}
+          saved={async () => {
+            setForm(false);
+            setEditing(null);
+            await load();
+            notify(
+              "Manual order saved locally. Only its customer profile is queued for synchronization.",
+            );
+          }}
+          notify={notify}
+        />
+      )}
+      {paymentDraft&&detail&&<div className="editor-overlay" role="dialog" aria-modal="true"><form className="payment-dialog" onSubmit={async event=>{event.preventDefault();try{await window.admin.orders.addPayment({orderKind:detail.kind==="online"?"online":"local",orderId:detail.id,amount:Number(paymentDraft.amount),occurredAt:new Date().toISOString(),method:paymentDraft.method,direction:paymentDraft.direction,notes:paymentDraft.notes});setPaymentDraft(null);setDetail(await window.admin.orders.detail(detail.kind,detail.id));await load();notify(paymentDraft.direction==="received"?"Receipt recorded.":"Refund recorded.");}catch(error){notify(error instanceof Error?error.message:String(error));}}}><header><h2>Record {paymentDraft.direction==="received"?"receipt":"refund"}</h2><button className="button button-ghost" type="button" onClick={()=>setPaymentDraft(null)}>Close</button></header><label>Amount<input required min="0.01" step="0.01" type="number" value={paymentDraft.amount} onChange={event=>setPaymentDraft({...paymentDraft,amount:event.target.value})}/></label><label>Method<select value={paymentDraft.method} onChange={event=>setPaymentDraft({...paymentDraft,method:event.target.value})}><option>UPI</option><option>Cash</option><option>Bank transfer</option><option>Card</option><option>Other</option></select></label><label>Notes<textarea maxLength={500} value={paymentDraft.notes} onChange={event=>setPaymentDraft({...paymentDraft,notes:event.target.value})}/></label><footer><button className="button button-primary">Save {paymentDraft.direction==="received"?"receipt":"refund"}</button></footer></form></div>}
+    </>
+  );
 }
 
-function ManualOrderModal({edit,prefillCustomerId,sources,close,saved,notify}:{edit:UnifiedOrderDetail|null;prefillCustomerId:string|null;sources:OrderingSource[];close():void;saved():Promise<void>;notify(message:string):void}){
-  const [customers,setCustomers]=useState<CustomerSummary[]>([]);const [catalog,setCatalog]=useState<{categories:CatalogCategory[];items:CatalogItem[]}>({categories:[],items:[]});const [customerId,setCustomerId]=useState(prefillCustomerId??"");const [customer,setCustomer]=useState<CustomerInput>({name:edit?.customerName??"",phone:edit?.phone??"",email:edit?.email??"",archived:false});const [date,setDate]=useState(edit?.serviceDate??today());const [fulfilment,setFulfilment]=useState<"pickup"|"delivery">((edit?.fulfilment as any)??"pickup");const [address,setAddress]=useState(edit?.address??"");const [notes,setNotes]=useState(edit?.notes??"");const [status,setStatus]=useState<any>(edit?.status??"confirmed");const [sourceId,setSourceId]=useState(edit?.sourceId??"direct");const [lines,setLines]=useState(edit?.lines.map((line)=>({menuItemId:line.menuItemId,name:line.name,quantity:line.quantity,unitPrice:line.unitPrice}))??[]);const [catalogId,setCatalogId]=useState("");
-  useEffect(()=>{Promise.all([window.admin.customers.list("",false),window.admin.menu.catalog()]).then(([people,menu])=>{setCustomers(people);setCatalog(menu);if(prefillCustomerId){const person=people.find((entry)=>entry.id===prefillCustomerId);if(person){setCustomerId(person.id);setCustomer({id:person.id,name:person.name,phone:person.phone,email:person.email??"",archived:false});}}});},[]);
-  function chooseCustomer(id:string){setCustomerId(id);const person=customers.find((entry)=>entry.id===id);if(person)setCustomer({id:person.id,name:person.name,phone:person.phone,email:person.email??"",archived:false});else setCustomer({name:"",phone:"",email:"",archived:false});}
-  function addCatalog(){const item=catalog.items.find((entry)=>entry.id===catalogId);if(item){setLines([...lines,{menuItemId:item.id,name:item.name,quantity:1,unitPrice:item.price}]);setCatalogId("");}}
-  const sourceOptions=edit&&!sources.some((entry)=>entry.id===edit.sourceId)?[...sources,{id:edit.sourceId,name:edit.sourceName}]:sources;
-  async function submit(event:React.FormEvent){event.preventDefault();const source=sourceOptions.find((entry)=>entry.id===sourceId);if(!source)return notify("Choose an available source.");await window.admin.orders.save({id:edit?.id,customer,serviceDate:date,fulfilment,address,notes,source,status,lines});await saved();}
-  return <div className="editor-overlay" role="dialog" aria-modal="true"><form className="manual-order-modal" onSubmit={(event)=>submit(event).catch((error)=>notify(error.message))}><header><div><small>LOCAL ONLY</small><h2>{edit?"Edit manual order":"New manual order"}</h2></div><button type="button" onClick={close}>Close</button></header><div className="form-grid"><label>Customer<select value={customerId} onChange={(event)=>chooseCustomer(event.target.value)}><option value="">New customer</option>{customers.map((entry)=><option key={entry.id} value={entry.id}>{entry.name} / {entry.phone}</option>)}</select></label><label>Name<input required value={customer.name} onChange={(event)=>setCustomer({...customer,name:event.target.value})}/></label><label>Phone<input required value={customer.phone} onChange={(event)=>setCustomer({...customer,phone:event.target.value})}/></label><label>Email<input type="email" value={customer.email} onChange={(event)=>setCustomer({...customer,email:event.target.value})}/></label><label>Order / service date<input required type="date" value={date} onChange={(event)=>setDate(event.target.value)}/></label><label>Source<select value={sourceId} onChange={(event)=>setSourceId(event.target.value)}>{sources.map((entry)=><option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label><label>Fulfilment<select value={fulfilment} onChange={(event)=>setFulfilment(event.target.value as any)}><option value="pickup">Pickup</option><option value="delivery">Delivery</option></select></label><label>Status<select value={status} onChange={(event)=>setStatus(event.target.value)}>{["draft","confirmed","preparing","ready","completed","cancelled"].map((value)=><option key={value}>{value}</option>)}</select></label></div>{fulfilment==="delivery"&&<label>Delivery address<textarea required value={address} onChange={(event)=>setAddress(event.target.value)}/></label>}<label>Notes<textarea value={notes} onChange={(event)=>setNotes(event.target.value)}/></label><section className="manual-lines"><h3>Order items</h3><div className="line-adder"><select value={catalogId} onChange={(event)=>setCatalogId(event.target.value)}><option value="">Choose catalog item</option>{catalog.items.filter((item)=>item.available&&!item.archived).map((item)=><option key={item.id} value={item.id}>{item.name} / {money(item.price)}</option>)}</select><button type="button" onClick={addCatalog}>Add catalog item</button><button type="button" onClick={()=>setLines([...lines,{menuItemId:null,name:"Custom item",quantity:1,unitPrice:0}])}>Add custom line</button></div>{lines.map((line,index)=><div className="manual-line" key={index}><input aria-label="Item name" value={line.name} onChange={(event)=>{const next=[...lines];next[index]={...line,name:event.target.value};setLines(next);}}/><input aria-label="Quantity" type="number" min="1" value={line.quantity} onChange={(event)=>{const next=[...lines];next[index]={...line,quantity:Number(event.target.value)};setLines(next);}}/><input aria-label="Unit price" type="number" min="0" value={line.unitPrice} onChange={(event)=>{const next=[...lines];next[index]={...line,unitPrice:Number(event.target.value)};setLines(next);}}/><b>{money(line.quantity*line.unitPrice)}</b><button type="button" onClick={()=>setLines(lines.filter((_,entry)=>entry!==index))}>Remove</button></div>)}<footer><span>Total</span><strong>{money(lines.reduce((sum,line)=>sum+line.quantity*line.unitPrice,0))}</strong></footer></section><div className="modal-actions"><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={!lines.length}>Save manual order</button></div></form></div>;
+function ManualOrderModal({
+  edit,
+  prefillCustomerId,
+  sources,
+  close,
+  saved,
+  notify,
+}: {
+  edit: UnifiedOrderDetail | null;
+  prefillCustomerId: string | null;
+  sources: OrderingSource[];
+  close(): void;
+  saved(): Promise<void>;
+  notify(message: string): void;
+}) {
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
+  const [catalog, setCatalog] = useState<{
+    categories: CatalogCategory[];
+    items: CatalogItem[];
+  }>({ categories: [], items: [] });
+  const [customerId, setCustomerId] = useState(prefillCustomerId ?? "");
+  const [customer, setCustomer] = useState<CustomerInput>({
+    name: edit?.customerName ?? "",
+    phone: edit?.phone ?? "",
+    email: edit?.email ?? "",
+    archived: false,
+  });
+  const [date, setDate] = useState(edit?.serviceDate ?? today());
+  const [serviceType,setServiceType]=useState<"general"|"party"|"bulk">((edit?.serviceType as any)??"general");
+  const [serviceStartTime,setServiceStartTime]=useState(edit?.serviceStartTime??"");
+  const [serviceEndTime,setServiceEndTime]=useState(edit?.serviceEndTime??"");
+  const [serviceDetails,setServiceDetails]=useState(edit?.serviceDetails??{occasion:"",guestCount:null,dietary:"",packaging:""});
+  const [fulfilment, setFulfilment] = useState<"pickup" | "delivery">(
+    (edit?.fulfilment as any) ?? "pickup",
+  );
+  const [address, setAddress] = useState(edit?.address ?? "");
+  const [notes, setNotes] = useState(edit?.notes ?? "");
+  const [status, setStatus] = useState<any>(edit?.status ?? "confirmed");
+  const [sourceId, setSourceId] = useState(edit?.sourceId ?? "direct");
+  const [lines, setLines] = useState<any[]>(
+    edit?.lines.map((line) => ({
+      menuItemId: line.menuItemId,
+      name: line.name,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      consumptionMode: "none",
+      recipeId: null,
+    })) ?? [],
+  );
+  const [catalogId, setCatalogId] = useState("");
+  useEffect(() => {
+    Promise.all([
+      window.admin.customers.list("", false),
+      window.admin.menu.catalog(),
+    ]).then(([people, menu]) => {
+      setCustomers(people);
+      setCatalog(menu);
+      if (prefillCustomerId) {
+        const person = people.find((entry) => entry.id === prefillCustomerId);
+        if (person) {
+          setCustomerId(person.id);
+          setCustomer({
+            id: person.id,
+            name: person.name,
+            phone: person.phone,
+            email: person.email ?? "",
+            archived: false,
+          });
+        }
+      }
+    });
+  }, []);
+  function chooseCustomer(id: string) {
+    setCustomerId(id);
+    const person = customers.find((entry) => entry.id === id);
+    if (person)
+      setCustomer({
+        id: person.id,
+        name: person.name,
+        phone: person.phone,
+        email: person.email ?? "",
+        archived: false,
+      });
+    else setCustomer({ name: "", phone: "", email: "", archived: false });
+  }
+  function addCatalog() {
+    const item = catalog.items.find((entry) => entry.id === catalogId);
+    if (item) {
+      setLines([
+        ...lines,
+        {
+          menuItemId: item.id,
+          name: item.name,
+          quantity: 1,
+          unitPrice: item.price,
+          consumptionMode: "none",
+          recipeId: null,
+        },
+      ]);
+      setCatalogId("");
+    }
+  }
+  const sourceOptions =
+    edit && !sources.some((entry) => entry.id === edit.sourceId)
+      ? [...sources, { id: edit.sourceId, name: edit.sourceName }]
+      : sources;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const source = sourceOptions.find((entry) => entry.id === sourceId);
+    if (!source) return notify("Choose an available source.");
+    await window.admin.orders.save({
+      id: edit?.id,
+      customer,
+      serviceType,
+      serviceDetails,
+      serviceDate: date,
+      serviceEndDate: edit?.serviceEndDate ?? null,
+      serviceStartTime: serviceStartTime || null,
+      serviceEndTime: serviceEndTime || null,
+      fulfilment,
+      address,
+      notes,
+      source,
+      status,
+      adjustmentLabel: edit?.adjustmentLabel ?? "",
+      adjustmentAmount: edit?.adjustmentAmount ?? 0,
+      enquiryId: edit?.enquiryId ?? null,
+      enquiryReference: edit?.enquiryReference ?? null,
+      tiffinPlanId: edit?.tiffinPlanId ?? null,
+      lines,
+    });
+    await saved();
+  }
+  return (
+    <div className="editor-overlay" role="dialog" aria-modal="true">
+      <form
+        className="manual-order-modal"
+        onSubmit={(event) =>
+          submit(event).catch((error) => notify(error.message))
+        }
+      >
+        <header>
+          <div>
+            <small>LOCAL ONLY</small>
+            <h2>{edit ? "Edit manual order" : "New manual order"}</h2>
+          </div>
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </header>
+        <div className="form-grid">
+          <label>Service type<select required value={serviceType} onChange={event=>setServiceType(event.target.value as any)} disabled={Boolean(edit?.tiffinPlanId)}><option value="general">General order</option><option value="party">Party order</option><option value="bulk">Bulk order</option></select></label>
+          <label>
+            Customer
+            <select
+              value={customerId}
+              onChange={(event) => chooseCustomer(event.target.value)}
+            >
+              <option value="">New customer</option>
+              {customers.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name} / {entry.phone}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Name
+            <input
+              required
+              value={customer.name}
+              onChange={(event) =>
+                setCustomer({ ...customer, name: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Phone
+            <input
+              required
+              value={customer.phone}
+              onChange={(event) =>
+                setCustomer({ ...customer, phone: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Email
+            <input
+              type="email"
+              value={customer.email}
+              onChange={(event) =>
+                setCustomer({ ...customer, email: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Order / service date
+            <input
+              required
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </label>
+          <label>Required start time<input type="time" value={serviceStartTime} onChange={event=>setServiceStartTime(event.target.value)}/></label>
+          <label>Required end time<input type="time" value={serviceEndTime} onChange={event=>setServiceEndTime(event.target.value)}/></label>
+          <label>
+            Source
+            <select
+              value={sourceId}
+              onChange={(event) => setSourceId(event.target.value)}
+            >
+              {sources.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Fulfilment
+            <select
+              value={fulfilment}
+              onChange={(event) => setFulfilment(event.target.value as any)}
+            >
+              <option value="pickup">Pickup</option>
+              <option value="delivery">Delivery</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              {[
+                "draft",
+                "confirmed",
+                "preparing",
+                "ready",
+                "completed",
+                "cancelled",
+              ].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {(serviceType==="party"||serviceType==="bulk")&&<fieldset className="service-details"><legend>{serviceType==="party"?"Party":"Bulk"} service details</legend><div className="form-grid"><label>Occasion or organisation<input maxLength={160} value={serviceDetails.occasion} onChange={event=>setServiceDetails({...serviceDetails,occasion:event.target.value})}/></label><label>Confirmed guest / meal count<input required type="number" min="1" max="100000" value={serviceDetails.guestCount??""} onChange={event=>setServiceDetails({...serviceDetails,guestCount:event.target.value?Number(event.target.value):null})}/></label></div><label>Dietary restrictions and allergies<textarea maxLength={2000} value={serviceDetails.dietary} onChange={event=>setServiceDetails({...serviceDetails,dietary:event.target.value})}/></label><label>Packaging and serving requirements<textarea maxLength={2000} value={serviceDetails.packaging} onChange={event=>setServiceDetails({...serviceDetails,packaging:event.target.value})}/></label></fieldset>}
+        {fulfilment === "delivery" && (
+          <label>
+            Delivery address
+            <textarea
+              required
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+            />
+          </label>
+        )}
+        <label>
+          Notes
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </label>
+        <section className="manual-lines">
+          <h3>Order items</h3>
+          <div className="line-adder">
+            <select
+              value={catalogId}
+              onChange={(event) => setCatalogId(event.target.value)}
+            >
+              <option value="">Choose catalog item</option>
+              {catalog.items
+                .filter((item) => item.available && !item.archived)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} / {money(item.price)}
+                  </option>
+                ))}
+            </select>
+            <button type="button" onClick={addCatalog}>
+              Add catalog item
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setLines([
+                  ...lines,
+                  {
+                    menuItemId: null,
+                    name: "Custom item",
+                    quantity: 1,
+                    unitPrice: 0,
+                  },
+                ])
+              }
+            >
+              Add custom line
+            </button>
+          </div>
+          {lines.map((line, index) => (
+            <div className="manual-line" key={index}>
+              <input
+                aria-label="Item name"
+                value={line.name}
+                onChange={(event) => {
+                  const next = [...lines];
+                  next[index] = { ...line, name: event.target.value };
+                  setLines(next);
+                }}
+              />
+              <input
+                aria-label="Quantity"
+                type="number"
+                min="1"
+                value={line.quantity}
+                onChange={(event) => {
+                  const next = [...lines];
+                  next[index] = {
+                    ...line,
+                    quantity: Number(event.target.value),
+                  };
+                  setLines(next);
+                }}
+              />
+              <input
+                aria-label="Unit price"
+                type="number"
+                min="0"
+                value={line.unitPrice}
+                onChange={(event) => {
+                  const next = [...lines];
+                  next[index] = {
+                    ...line,
+                    unitPrice: Number(event.target.value),
+                  };
+                  setLines(next);
+                }}
+              />
+              <b>{money(line.quantity * line.unitPrice)}</b>
+              <button
+                type="button"
+                onClick={() =>
+                  setLines(lines.filter((_, entry) => entry !== index))
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <footer>
+            <span>Total</span>
+            <strong>
+              {money(
+                lines.reduce(
+                  (sum, line) => sum + line.quantity * line.unitPrice,
+                  0,
+                ),
+              )}
+            </strong>
+          </footer>
+        </section>
+        <div className="modal-actions">
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+          <button className="primary" disabled={!lines.length}>
+            Save manual order
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
-function CustomersPage({notify,newOrder}:{notify:(message:string)=>void;newOrder(id:string):void}){const [rows,setRows]=useState<CustomerSummary[]>([]);const [query,setQuery]=useState("");const [includeArchived,setIncludeArchived]=useState(false);const [editing,setEditing]=useState<CustomerInput|null>(null);const load=()=>window.admin.customers.list(query,includeArchived).then(setRows);useEffect(()=>{load();},[query,includeArchived]);async function save(event:React.FormEvent){event.preventDefault();if(!editing)return;await window.admin.customers.save(editing);setEditing(null);await load();notify("Customer saved locally. Push from Sync Centre to update Neon.");}return <><Panel title="Customer directory" action={<button className="primary" onClick={()=>setEditing({name:"",phone:"",email:"",archived:false})}>+ Add customer</button>}><div className="customer-toolbar"><input className="search" placeholder="Search name, phone or email" value={query} onChange={(event)=>setQuery(event.target.value)}/><label><input type="checkbox" checked={includeArchived} onChange={(event)=>setIncludeArchived(event.target.checked)}/> Include archived</label></div><div className="customer-list">{rows.map((row)=><article className={row.archived?"archived":""} key={row.id}><div><strong>{row.name}</strong><span>{row.phone}{row.email?` / ${row.email}`:""}</span>{row.addresses[0]&&<small>{row.addresses[0]}</small>}</div><span className={`customer-source ${row.source}`}>{row.source}</span><div><button onClick={()=>setEditing({id:row.id,name:row.name,phone:row.phone,email:row.email??"",archived:row.archived})}>Edit</button><button onClick={()=>window.admin.customers.openWhatsApp(row.id).catch((error)=>notify(error.message))}>WhatsApp</button><button disabled={!row.email} onClick={()=>window.admin.customers.composeEmail(row.id).catch((error)=>notify(error.message))}>Email</button><button disabled={row.archived} onClick={()=>newOrder(row.id)}>New order</button><button onClick={async()=>{await window.admin.customers.archive(row.id,!row.archived);load();notify(row.archived?"Customer restored.":"Customer archived locally and queued for sync.");}}>{row.archived?"Restore":"Archive"}</button></div></article>)}{!rows.length&&<Empty text="No customers match this search."/>}</div></Panel>{editing&&<div className="editor-overlay" role="dialog" aria-modal="true"><form className="customer-editor" onSubmit={(event)=>save(event).catch((error)=>notify(error.message))}><header><h2>{editing.id?"Edit customer":"Add customer"}</h2><button type="button" onClick={()=>setEditing(null)}>Close</button></header><label>Name<input required value={editing.name} onChange={(event)=>setEditing({...editing,name:event.target.value})}/></label><label>Phone<input required value={editing.phone} onChange={(event)=>setEditing({...editing,phone:event.target.value})}/></label><label>Email<input type="email" value={editing.email} onChange={(event)=>setEditing({...editing,email:event.target.value})}/></label><button className="primary">Save customer</button></form></div>}</>}
+function CustomersPage({
+  notify,
+  newOrder,
+}: {
+  notify: (message: string) => void;
+  newOrder(id: string): void;
+}) {
+  const [rows, setRows] = useState<CustomerSummary[]>([]);
+  const [query, setQuery] = useState("");
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [editing, setEditing] = useState<CustomerInput | null>(null);
+  const load = () =>
+    window.admin.customers.list(query, includeArchived).then(setRows);
+  useEffect(() => {
+    load();
+  }, [query, includeArchived]);
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    await window.admin.customers.save(editing);
+    setEditing(null);
+    await load();
+    notify("Customer saved locally. Push from Sync Centre to update Neon.");
+  }
+  return (
+    <>
+      <Panel
+        title="Customer directory"
+        action={
+          <button
+            className="primary"
+            onClick={() =>
+              setEditing({ name: "", phone: "", email: "", archived: false })
+            }
+          >
+            + Add customer
+          </button>
+        }
+      >
+        <div className="customer-toolbar">
+          <input
+            className="search"
+            placeholder="Search name, phone or email"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <label>
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(event) => setIncludeArchived(event.target.checked)}
+            />{" "}
+            Include archived
+          </label>
+        </div>
+        <div className="customer-list">
+          {rows.map((row) => (
+            <article className={row.archived ? "archived" : ""} key={row.id}>
+              <div>
+                <strong>{row.name}</strong>
+                <span>
+                  {row.phone}
+                  {row.email ? ` / ${row.email}` : ""}
+                </span>
+                {row.addresses[0] && <small>{row.addresses[0]}</small>}
+              </div>
+              <span className={`customer-source ${row.source}`}>
+                {row.source}
+              </span>
+              <div>
+                <button
+                  onClick={() =>
+                    setEditing({
+                      id: row.id,
+                      name: row.name,
+                      phone: row.phone,
+                      email: row.email ?? "",
+                      archived: row.archived,
+                    })
+                  }
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() =>
+                    window.admin.customers
+                      .openWhatsApp(row.id)
+                      .catch((error) => notify(error.message))
+                  }
+                >
+                  WhatsApp
+                </button>
+                <button
+                  disabled={!row.email}
+                  onClick={() =>
+                    window.admin.customers
+                      .composeEmail(row.id)
+                      .catch((error) => notify(error.message))
+                  }
+                >
+                  Email
+                </button>
+                <button
+                  disabled={row.archived}
+                  onClick={() => newOrder(row.id)}
+                >
+                  New order
+                </button>
+                <button
+                  onClick={async () => {
+                    await window.admin.customers.archive(row.id, !row.archived);
+                    load();
+                    notify(
+                      row.archived
+                        ? "Customer restored."
+                        : "Customer archived locally and queued for sync.",
+                    );
+                  }}
+                >
+                  {row.archived ? "Restore" : "Archive"}
+                </button>
+              </div>
+            </article>
+          ))}
+          {!rows.length && <Empty text="No customers match this search." />}
+        </div>
+      </Panel>
+      {editing && (
+        <div className="editor-overlay" role="dialog" aria-modal="true">
+          <form
+            className="customer-editor"
+            onSubmit={(event) =>
+              save(event).catch((error) => notify(error.message))
+            }
+          >
+            <header>
+              <h2>{editing.id ? "Edit customer" : "Add customer"}</h2>
+              <button type="button" onClick={() => setEditing(null)}>
+                Close
+              </button>
+            </header>
+            <label>
+              Name
+              <input
+                required
+                value={editing.name}
+                onChange={(event) =>
+                  setEditing({ ...editing, name: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Phone
+              <input
+                required
+                value={editing.phone}
+                onChange={(event) =>
+                  setEditing({ ...editing, phone: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={editing.email}
+                onChange={(event) =>
+                  setEditing({ ...editing, email: event.target.value })
+                }
+              />
+            </label>
+            <button className="primary">Save customer</button>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
 
-const blankCatalogItem = (categoryId = ""): CatalogItem => ({ id: "", categoryId, type: "dish", name: "", description: "", portion: "1 serving", price: 0, image: undefined, available: true, isNew: false, tags: [], order: 0, archived: false, webCompatible: true, bundleGroups: [] });
-const catalogImage = (image?: string | null) => `catalog-image://image/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
-function CatalogPage({ notify, previewImages }: { notify: (message: string) => void; previewImages: (count:number) => void }) {
-  const [catalog,setCatalog]=useState<{categories:CatalogCategory[];items:CatalogItem[]}>({categories:[],items:[]}); const [query,setQuery]=useState(""); const [editing,setEditing]=useState<CatalogItem|null>(null); const [type,setType]=useState("all"); const [status,setStatus]=useState("active"); const [preview,setPreview]=useState(false); const [quick,setQuick]=useState<string|null>(null); const [exporting,setExporting]=useState<"pdf"|"images"|"preview"|null>(null); const [managingCategories,setManagingCategories]=useState(false);
-  const load=()=>window.admin.catalog.get().then(setCatalog); useEffect(()=>{load();},[]);
-  const visibleCategories=catalog.categories.filter((category)=>category.active);
-  const rows=catalog.items.filter((item)=>(status==="all"||(status==="active"?!item.archived:item.archived))&&(type==="all"||item.type===type)&&searchableCatalogItem(item,query));
-  function edit(item:CatalogItem){setEditing({...item,tags:[...item.tags],bundleGroups:item.bundleGroups.map((group)=>({...group,choices:group.choices.map((choice)=>({...choice}))}))});}
-  async function save(item:CatalogItem,selection:CatalogImageSaveSelection){const result=await window.admin.catalog.saveWithImage(item,selection);await load();setEditing(null);notify(result.warning??`${result.item.name} and its image were saved locally. Push from Sync Centre to update Neon.`);}
-  async function exportPdf(){setExporting("pdf");try{const result=await window.admin.catalog.exportPdf();if(result.canceled){notify("Menu PDF export was cancelled.");return;}notify(result.warning??`Menu PDF saved successfully (${result.pageCount} pages).`);}catch(error){notify(`Menu PDF export failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function exportImages(){setExporting("images");try{const result=await window.admin.catalog.exportImages();if(result.canceled){notify("Master menu image export was cancelled.");return;}notify(result.warning??`Saved ${result.imageCount} master menu ${result.imageCount===1?"image":"images"}.`);previewImages(result.imageCount);}catch(error){notify(`Master menu image export failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function previewMasterImages(){setExporting("preview");try{const result=await window.admin.catalog.previewImages();notify(result.warning??"Master menu preview generated.");previewImages(result.imageCount);}catch(error){notify(`Master menu preview failed: ${error instanceof Error?error.message:String(error)}`);}finally{setExporting(null);}}
-  async function saveCategory(category:CatalogCategory){await window.admin.catalog.saveCategory(category);await load();notify(`${category.name} was saved locally.`);}
-  async function toggleCategory(category:CatalogCategory){if(category.active&&!confirm(`Remove ${category.name} from the master menu? Its items will remain stored.`))return;await window.admin.catalog.setCategoryActive(category.id,!category.active);await load();notify(`${category.name} was ${category.active?"removed from":"restored to"} the master menu.`);}
-  return <><section className="visual-catalog-page"><div className="catalog-toolbar"><div className="catalog-heading"><div><small>{preview?"PREVIEW MODE":"EDIT MODE"}</small><h2>Menu card editor</h2></div><div className="catalog-export-actions"><button className="pdf-export" disabled={Boolean(exporting)} onClick={exportPdf}>{exporting==="pdf"?"Generating PDF...":"Export menu PDF"}</button><button className="image-preview-button" disabled={Boolean(exporting)} onClick={previewMasterImages}>{exporting==="preview"?"Generating preview...":"Preview master menu"}</button><button className="image-export" disabled={Boolean(exporting)} onClick={exportImages}>{exporting==="images"?"Generating images...":"Export master menu images"}</button></div></div><div className="toolbar-actions"><button className="primary" disabled={!visibleCategories.length} onClick={()=>edit(blankCatalogItem(visibleCategories[0]?.id))}>+ Add catalog item</button><button onClick={()=>setManagingCategories(true)}>Manage categories</button><button onClick={()=>setPreview(!preview)}>{preview?"Return to edit":"Preview catalog"}</button></div><label>Search<input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search ID, name, portion, description or tags"/></label><label>Type<select value={type} onChange={(event)=>setType(event.target.value)}><option value="all">All types</option><option value="dish">Dish</option><option value="combo">Combo</option><option value="thali">Thali</option></select></label><label>Status<select value={status} onChange={(event)=>setStatus(event.target.value)}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select></label></div><div className="category-admin-grid">{visibleCategories.map((category)=>{const categoryItems=rows.filter((item)=>item.categoryId===category.id);if(preview&&!categoryItems.length)return null;return <section className="category-panel" key={category.id}><header><div><small>{String(category.order).padStart(2,"0")}</small><h2>{category.name}</h2></div>{!preview&&<button onClick={()=>edit(blankCatalogItem(category.id))}>+ Add</button>}</header><div>{categoryItems.length===0&&<Empty text="No matching items."/>}{categoryItems.map((item)=><article className={item.archived?"archived":""} key={item.id}><img src={catalogImage(item.image)} onError={(event)=>{event.currentTarget.src=catalogImage();}}/><div className="catalog-card-copy">{quick===item.id?<QuickCatalogEdit item={item} cancel={()=>setQuick(null)} saved={async(next)=>{await window.admin.catalog.save(next);setQuick(null);load();notify(`${next.name} was updated.`);}}/>:<><div className="catalog-title"><h3>{item.name}</h3><strong>{money(item.price)}</strong></div><p>{item.portion||item.description}</p><div className="badges"><span>{item.type}</span>{item.isNew&&<span>New</span>}{!item.available&&<span>Unavailable</span>}{!item.webCompatible&&<span>Desktop only</span>}{item.archived&&<span>Archived</span>}</div>{!preview&&<footer>{!item.archived&&<><button onClick={()=>setQuick(item.id)}>Quick edit</button><button onClick={()=>edit(item)}>Edit details</button><button onClick={()=>window.admin.catalog.save({...item,webCompatible:!item.webCompatible}).then(load)}>{item.webCompatible?"Make desktop only":"Enable on website"}</button><button className="danger" onClick={async()=>{if(!confirm(`Archive ${item.name}?`))return;await window.admin.catalog.archive(item.id,true);load();}}>Archive</button></>}{item.archived&&<button onClick={async()=>{await window.admin.catalog.archive(item.id,false);load();}}>Restore</button>}</footer>}</>}</div></article>)}</div></section>;})}</div></section>{editing&&<CatalogEditorModal item={editing} categories={catalog.categories} items={catalog.items} onClose={()=>setEditing(null)} onSave={save} notify={notify}/>} {managingCategories&&<CategoryManagerModal categories={catalog.categories} onClose={()=>setManagingCategories(false)} onSave={saveCategory} onToggle={toggleCategory}/>}</>;
+const blankCatalogItem = (categoryId = ""): CatalogItem => ({
+  id: "",
+  categoryId,
+  type: "dish",
+  name: "",
+  description: "",
+  portion: "1 serving",
+  price: 0,
+  image: undefined,
+  available: true,
+  isNew: false,
+  tags: [],
+  order: 0,
+  archived: false,
+  webCompatible: true,
+  bundleGroups: [],
+});
+const catalogImage = (image?: string | null) =>
+  `catalog-image://image/${encodeURIComponent(image || "food-placeholder.jpeg")}`;
+function CatalogPage({
+  notify,
+  previewImages,
+}: {
+  notify: (message: string) => void;
+  previewImages: (count: number) => void;
+}) {
+  const [catalog, setCatalog] = useState<{
+    categories: CatalogCategory[];
+    items: CatalogItem[];
+  }>({ categories: [], items: [] });
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<CatalogItem | null>(null);
+  const [type, setType] = useState("all");
+  const [status, setStatus] = useState("active");
+  const [preview, setPreview] = useState(false);
+  const [quick, setQuick] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<
+    "pdf" | "images" | "preview" | null
+  >(null);
+  const [managingCategories, setManagingCategories] = useState(false);
+  const load = () => window.admin.catalog.get().then(setCatalog);
+  useEffect(() => {
+    load();
+  }, []);
+  const visibleCategories = catalog.categories.filter(
+    (category) => category.active,
+  );
+  const rows = catalog.items.filter(
+    (item) =>
+      (status === "all" ||
+        (status === "active" ? !item.archived : item.archived)) &&
+      (type === "all" || item.type === type) &&
+      searchableCatalogItem(item, query),
+  );
+  function edit(item: CatalogItem) {
+    setEditing({
+      ...item,
+      tags: [...item.tags],
+      bundleGroups: item.bundleGroups.map((group) => ({
+        ...group,
+        choices: group.choices.map((choice) => ({ ...choice })),
+      })),
+    });
+  }
+  async function save(item: CatalogItem, selection: CatalogImageSaveSelection) {
+    const result = await window.admin.catalog.saveWithImage(item, selection);
+    await load();
+    setEditing(null);
+    notify(
+      result.warning ??
+        `${result.item.name} and its image were saved locally. Push from Sync Centre to update Neon.`,
+    );
+  }
+  async function exportPdf() {
+    setExporting("pdf");
+    try {
+      const result = await window.admin.catalog.exportPdf();
+      if (result.canceled) {
+        notify("Menu PDF export was cancelled.");
+        return;
+      }
+      notify(
+        result.warning ??
+          `Menu PDF saved successfully (${result.pageCount} pages).`,
+      );
+    } catch (error) {
+      notify(
+        `Menu PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function exportImages() {
+    setExporting("images");
+    try {
+      const result = await window.admin.catalog.exportImages();
+      if (result.canceled) {
+        notify("Master menu image export was cancelled.");
+        return;
+      }
+      notify(
+        result.warning ??
+          `Saved ${result.imageCount} master menu ${result.imageCount === 1 ? "image" : "images"}.`,
+      );
+      previewImages(result.imageCount);
+    } catch (error) {
+      notify(
+        `Master menu image export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function previewMasterImages() {
+    setExporting("preview");
+    try {
+      const result = await window.admin.catalog.previewImages();
+      notify(result.warning ?? "Master menu preview generated.");
+      previewImages(result.imageCount);
+    } catch (error) {
+      notify(
+        `Master menu preview failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+  async function saveCategory(category: CatalogCategory) {
+    await window.admin.catalog.saveCategory(category);
+    await load();
+    notify(`${category.name} was saved locally.`);
+  }
+  async function toggleCategory(category: CatalogCategory) {
+    if (
+      category.active &&
+      !confirm(
+        `Remove ${category.name} from the master menu? Its items will remain stored.`,
+      )
+    )
+      return;
+    await window.admin.catalog.setCategoryActive(category.id, !category.active);
+    await load();
+    notify(
+      `${category.name} was ${category.active ? "removed from" : "restored to"} the master menu.`,
+    );
+  }
+  return (
+    <>
+      <section className="visual-catalog-page">
+        <div className="catalog-toolbar">
+          <div className="catalog-heading">
+            <div>
+              <small>{preview ? "PREVIEW MODE" : "EDIT MODE"}</small>
+              <h2>Menu card editor</h2>
+            </div>
+            <div className="catalog-export-actions">
+              <button
+                className="pdf-export"
+                disabled={Boolean(exporting)}
+                onClick={exportPdf}
+              >
+                {exporting === "pdf" ? "Generating PDF..." : "Export menu PDF"}
+              </button>
+              <button
+                className="image-preview-button"
+                disabled={Boolean(exporting)}
+                onClick={previewMasterImages}
+              >
+                {exporting === "preview"
+                  ? "Generating preview..."
+                  : "Preview master menu"}
+              </button>
+              <button
+                className="image-export"
+                disabled={Boolean(exporting)}
+                onClick={exportImages}
+              >
+                {exporting === "images"
+                  ? "Generating images..."
+                  : "Export master menu images"}
+              </button>
+            </div>
+          </div>
+          <div className="toolbar-actions">
+            <button
+              className="primary"
+              disabled={!visibleCategories.length}
+              onClick={() => edit(blankCatalogItem(visibleCategories[0]?.id))}
+            >
+              + Add catalog item
+            </button>
+            <button onClick={() => setManagingCategories(true)}>
+              Manage categories
+            </button>
+            <button onClick={() => setPreview(!preview)}>
+              {preview ? "Return to edit" : "Preview catalog"}
+            </button>
+          </div>
+          <label>
+            Search
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search ID, name, portion, description or tags"
+            />
+          </label>
+          <label>
+            Type
+            <select
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+            >
+              <option value="all">All types</option>
+              <option value="dish">Dish</option>
+              <option value="combo">Combo</option>
+              <option value="thali">Thali</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+        </div>
+        <div className="category-admin-grid">
+          {visibleCategories.map((category) => {
+            const categoryItems = rows.filter(
+              (item) => item.categoryId === category.id,
+            );
+            if (preview && !categoryItems.length) return null;
+            return (
+              <section className="category-panel" key={category.id}>
+                <header>
+                  <div>
+                    <small>{String(category.order).padStart(2, "0")}</small>
+                    <h2>{category.name}</h2>
+                  </div>
+                  {!preview && (
+                    <button onClick={() => edit(blankCatalogItem(category.id))}>
+                      + Add
+                    </button>
+                  )}
+                </header>
+                <div>
+                  {categoryItems.length === 0 && (
+                    <Empty text="No matching items." />
+                  )}
+                  {categoryItems.map((item) => (
+                    <article
+                      className={item.archived ? "archived" : ""}
+                      key={item.id}
+                    >
+                      <img
+                        src={catalogImage(item.image)}
+                        onError={(event) => {
+                          event.currentTarget.src = catalogImage();
+                        }}
+                      />
+                      <div className="catalog-card-copy">
+                        {quick === item.id ? (
+                          <QuickCatalogEdit
+                            item={item}
+                            cancel={() => setQuick(null)}
+                            saved={async (next) => {
+                              await window.admin.catalog.save(next);
+                              setQuick(null);
+                              load();
+                              notify(`${next.name} was updated.`);
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <div className="catalog-title">
+                              <h3>{item.name}</h3>
+                              <strong>{money(item.price)}</strong>
+                            </div>
+                            <p>{item.portion || item.description}</p>
+                            <div className="badges">
+                              <span>{item.type}</span>
+                              {item.isNew && <span>New</span>}
+                              {!item.available && <span>Unavailable</span>}
+                              {!item.webCompatible && <span>Desktop only</span>}
+                              {item.archived && <span>Archived</span>}
+                            </div>
+                            {!preview && (
+                              <footer>
+                                {!item.archived && (
+                                  <>
+                                    <button onClick={() => setQuick(item.id)}>
+                                      Quick edit
+                                    </button>
+                                    <button onClick={() => edit(item)}>
+                                      Edit details
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        window.admin.catalog
+                                          .save({
+                                            ...item,
+                                            webCompatible: !item.webCompatible,
+                                          })
+                                          .then(load)
+                                      }
+                                    >
+                                      {item.webCompatible
+                                        ? "Make desktop only"
+                                        : "Enable on website"}
+                                    </button>
+                                    <button
+                                      className="danger"
+                                      onClick={async () => {
+                                        if (!confirm(`Archive ${item.name}?`))
+                                          return;
+                                        await window.admin.catalog.archive(
+                                          item.id,
+                                          true,
+                                        );
+                                        load();
+                                      }}
+                                    >
+                                      Archive
+                                    </button>
+                                  </>
+                                )}
+                                {item.archived && (
+                                  <button
+                                    onClick={async () => {
+                                      await window.admin.catalog.archive(
+                                        item.id,
+                                        false,
+                                      );
+                                      load();
+                                    }}
+                                  >
+                                    Restore
+                                  </button>
+                                )}
+                              </footer>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </section>
+      {editing && (
+        <CatalogEditorModal
+          item={editing}
+          categories={catalog.categories}
+          items={catalog.items}
+          onClose={() => setEditing(null)}
+          onSave={save}
+          notify={notify}
+        />
+      )}{" "}
+      {managingCategories && (
+        <CategoryManagerModal
+          categories={catalog.categories}
+          onClose={() => setManagingCategories(false)}
+          onSave={saveCategory}
+          onToggle={toggleCategory}
+        />
+      )}
+    </>
+  );
 }
 
 function LegacyCatalogPage({ notify }: { notify: (message: string) => void }) {
-  const [catalog, setCatalog] = useState<{ categories: any[]; items: CatalogItem[] }>({ categories: [], items: [] }); const [query, setQuery] = useState(""); const [editing, setEditing] = useState<CatalogItem | null>(null); const [type, setType] = useState("all"); const [status, setStatus] = useState("active"); const [preview, setPreview] = useState(false); const [quick, setQuick] = useState<string | null>(null); const [exporting, setExporting] = useState(false);
-  const load = () => window.admin.catalog.get().then(setCatalog); useEffect(() => { load(); }, []);
-  const rows = catalog.items.filter((item) => (status==="all"||(status==="active"?!item.archived:item.archived))&&(type==="all"||item.type===type)&&(item.name+" "+item.portion).toLowerCase().includes(query.toLowerCase()));
-  function edit(item: CatalogItem) { setEditing({ ...item, tags: [...item.tags], bundleGroups: item.bundleGroups.map((group)=>({...group,choices:group.choices.map((choice)=>({...choice}))})) }); }
-  async function save(item: CatalogItem) { await window.admin.catalog.save(item); await load(); setEditing(null); notify(`${item.name} was saved locally. Push from Sync Centre to update Neon.`); }
-  async function exportPdf() { setExporting(true); try { const result = await window.admin.catalog.exportPdf(); if (result.canceled) { notify("Menu PDF export was cancelled."); return; } notify(result.warning ?? `Menu PDF saved successfully (${result.pageCount} pages).`); } catch (error) { notify(`Menu PDF export failed: ${error instanceof Error ? error.message : String(error)}`); } finally { setExporting(false); } }
-  return <><section className="visual-catalog-page"><div className="catalog-toolbar"><div className="catalog-heading"><div><small>{preview?"PREVIEW MODE":"EDIT MODE"}</small><h2>Menu card editor</h2></div><button className="pdf-export" disabled={exporting} onClick={exportPdf}>{exporting?"Generating PDF...":"Export menu PDF"}</button></div>
-<div className="toolbar-actions"><button className="primary" onClick={()=>edit(blankCatalogItem(catalog.categories[0]?.id))}>+ Add catalog item</button><button onClick={()=>setPreview(!preview)}>{preview?"Return to edit":"Preview catalog"}</button></div>
-<label>Search<input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search name or portion"/></label><label>Type<select value={type} onChange={(event)=>setType(event.target.value)}><option value="all">All types</option><option value="dish">Dish</option><option value="combo">Combo</option><option value="thali">Thali</option></select></label><label>Status<select value={status} onChange={(event)=>setStatus(event.target.value)}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All</option></select></label></div><div className="category-admin-grid">{catalog.categories.map((category)=>{const categoryItems=rows.filter((item)=>item.categoryId===category.id);if(preview&&!categoryItems.length)return null;return <section className="category-panel" key={category.id}><header><div><small>{String(category.order).padStart(2,"0")}</small><h2>{category.name}</h2></div>{!preview&&<button onClick={()=>edit(blankCatalogItem(category.id))}>+ Add</button>}</header><div>{categoryItems.length===0&&<Empty text="No matching items."/>}{categoryItems.map((item)=><article className={item.archived?"archived":""} key={item.id}><img src={catalogImage(item.image)} onError={(event)=>{event.currentTarget.src=catalogImage();}}/><div className="catalog-card-copy">{quick===item.id?<QuickCatalogEdit item={item} cancel={()=>setQuick(null)} saved={async(next)=>{await window.admin.catalog.save(next);setQuick(null);load();notify(`${next.name} was updated.`);}}/>:<><div className="catalog-title"><h3>{item.name}</h3><strong>{money(item.price)}</strong></div><p>{item.portion||item.description}</p><div className="badges"><span>{item.type}</span>{item.isNew&&<span>New</span>}{!item.available&&<span>Unavailable</span>}{item.archived&&<span>Archived</span>}</div>{!preview&&<footer>{!item.archived&&<><button onClick={()=>setQuick(item.id)}>Quick edit</button><button onClick={()=>edit(item)}>Edit details</button><button className="danger" onClick={async()=>{if(!confirm(`Archive ${item.name}?`))return;await window.admin.catalog.archive(item.id,true);load();}}>Archive</button></>}{item.archived&&<button onClick={async()=>{await window.admin.catalog.archive(item.id,false);load();}}>Restore</button>}</footer>}</>}</div></article>)}</div></section>;})}</div></section>{editing&&<CatalogEditorModal item={editing} categories={catalog.categories} items={catalog.items} onClose={()=>setEditing(null)} onSave={save} notify={notify}/>}</>;
+  const [catalog, setCatalog] = useState<{
+    categories: any[];
+    items: CatalogItem[];
+  }>({ categories: [], items: [] });
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<CatalogItem | null>(null);
+  const [type, setType] = useState("all");
+  const [status, setStatus] = useState("active");
+  const [preview, setPreview] = useState(false);
+  const [quick, setQuick] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const load = () => window.admin.catalog.get().then(setCatalog);
+  useEffect(() => {
+    load();
+  }, []);
+  const rows = catalog.items.filter(
+    (item) =>
+      (status === "all" ||
+        (status === "active" ? !item.archived : item.archived)) &&
+      (type === "all" || item.type === type) &&
+      (item.name + " " + item.portion)
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
+  function edit(item: CatalogItem) {
+    setEditing({
+      ...item,
+      tags: [...item.tags],
+      bundleGroups: item.bundleGroups.map((group) => ({
+        ...group,
+        choices: group.choices.map((choice) => ({ ...choice })),
+      })),
+    });
+  }
+  async function save(item: CatalogItem) {
+    await window.admin.catalog.save(item);
+    await load();
+    setEditing(null);
+    notify(
+      `${item.name} was saved locally. Push from Sync Centre to update Neon.`,
+    );
+  }
+  async function exportPdf() {
+    setExporting(true);
+    try {
+      const result = await window.admin.catalog.exportPdf();
+      if (result.canceled) {
+        notify("Menu PDF export was cancelled.");
+        return;
+      }
+      notify(
+        result.warning ??
+          `Menu PDF saved successfully (${result.pageCount} pages).`,
+      );
+    } catch (error) {
+      notify(
+        `Menu PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+  return (
+    <>
+      <section className="visual-catalog-page">
+        <div className="catalog-toolbar">
+          <div className="catalog-heading">
+            <div>
+              <small>{preview ? "PREVIEW MODE" : "EDIT MODE"}</small>
+              <h2>Menu card editor</h2>
+            </div>
+            <button
+              className="pdf-export"
+              disabled={exporting}
+              onClick={exportPdf}
+            >
+              {exporting ? "Generating PDF..." : "Export menu PDF"}
+            </button>
+          </div>
+          <div className="toolbar-actions">
+            <button
+              className="primary"
+              onClick={() => edit(blankCatalogItem(catalog.categories[0]?.id))}
+            >
+              + Add catalog item
+            </button>
+            <button onClick={() => setPreview(!preview)}>
+              {preview ? "Return to edit" : "Preview catalog"}
+            </button>
+          </div>
+          <label>
+            Search
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search name or portion"
+            />
+          </label>
+          <label>
+            Type
+            <select
+              value={type}
+              onChange={(event) => setType(event.target.value)}
+            >
+              <option value="all">All types</option>
+              <option value="dish">Dish</option>
+              <option value="combo">Combo</option>
+              <option value="thali">Thali</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+        </div>
+        <div className="category-admin-grid">
+          {catalog.categories.map((category) => {
+            const categoryItems = rows.filter(
+              (item) => item.categoryId === category.id,
+            );
+            if (preview && !categoryItems.length) return null;
+            return (
+              <section className="category-panel" key={category.id}>
+                <header>
+                  <div>
+                    <small>{String(category.order).padStart(2, "0")}</small>
+                    <h2>{category.name}</h2>
+                  </div>
+                  {!preview && (
+                    <button onClick={() => edit(blankCatalogItem(category.id))}>
+                      + Add
+                    </button>
+                  )}
+                </header>
+                <div>
+                  {categoryItems.length === 0 && (
+                    <Empty text="No matching items." />
+                  )}
+                  {categoryItems.map((item) => (
+                    <article
+                      className={item.archived ? "archived" : ""}
+                      key={item.id}
+                    >
+                      <img
+                        src={catalogImage(item.image)}
+                        onError={(event) => {
+                          event.currentTarget.src = catalogImage();
+                        }}
+                      />
+                      <div className="catalog-card-copy">
+                        {quick === item.id ? (
+                          <QuickCatalogEdit
+                            item={item}
+                            cancel={() => setQuick(null)}
+                            saved={async (next) => {
+                              await window.admin.catalog.save(next);
+                              setQuick(null);
+                              load();
+                              notify(`${next.name} was updated.`);
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <div className="catalog-title">
+                              <h3>{item.name}</h3>
+                              <strong>{money(item.price)}</strong>
+                            </div>
+                            <p>{item.portion || item.description}</p>
+                            <div className="badges">
+                              <span>{item.type}</span>
+                              {item.isNew && <span>New</span>}
+                              {!item.available && <span>Unavailable</span>}
+                              {item.archived && <span>Archived</span>}
+                            </div>
+                            {!preview && (
+                              <footer>
+                                {!item.archived && (
+                                  <>
+                                    <button onClick={() => setQuick(item.id)}>
+                                      Quick edit
+                                    </button>
+                                    <button onClick={() => edit(item)}>
+                                      Edit details
+                                    </button>
+                                    <button
+                                      className="danger"
+                                      onClick={async () => {
+                                        if (!confirm(`Archive ${item.name}?`))
+                                          return;
+                                        await window.admin.catalog.archive(
+                                          item.id,
+                                          true,
+                                        );
+                                        load();
+                                      }}
+                                    >
+                                      Archive
+                                    </button>
+                                  </>
+                                )}
+                                {item.archived && (
+                                  <button
+                                    onClick={async () => {
+                                      await window.admin.catalog.archive(
+                                        item.id,
+                                        false,
+                                      );
+                                      load();
+                                    }}
+                                  >
+                                    Restore
+                                  </button>
+                                )}
+                              </footer>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </section>
+      {editing && (
+        <CatalogEditorModal
+          item={editing}
+          categories={catalog.categories}
+          items={catalog.items}
+          onClose={() => setEditing(null)}
+          onSave={save}
+          notify={notify}
+        />
+      )}
+    </>
+  );
 }
 
-function QuickCatalogEdit({item,cancel,saved}:{item:CatalogItem;cancel():void;saved(item:CatalogItem):Promise<void>}){const [name,setName]=useState(item.name);const [price,setPrice]=useState(item.price);return <div className="quick-edit"><label>Name<input value={name} onChange={(event)=>setName(event.target.value)}/></label><label>Price<input type="number" min="0" value={price} onChange={(event)=>setPrice(Number(event.target.value))}/></label><div><button onClick={()=>saved({...item,name,price})}>Save</button><button onClick={cancel}>Cancel</button></div></div>}
+function QuickCatalogEdit({
+  item,
+  cancel,
+  saved,
+}: {
+  item: CatalogItem;
+  cancel(): void;
+  saved(item: CatalogItem): Promise<void>;
+}) {
+  const [name, setName] = useState(item.name);
+  const [price, setPrice] = useState(item.price);
+  return (
+    <div className="quick-edit">
+      <label>
+        Name
+        <input value={name} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <label>
+        Price
+        <input
+          type="number"
+          min="0"
+          value={price}
+          onChange={(event) => setPrice(Number(event.target.value))}
+        />
+      </label>
+      <div>
+        <button onClick={() => saved({ ...item, name, price })}>Save</button>
+        <button onClick={cancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 function OperationsPage({ notify }: { notify: (message: string) => void }) {
-  const [config,setConfig]=useState<RuntimeConfig|null>(null);const [dragged,setDragged]=useState<string|null>(null);
-  useEffect(()=>{const load=()=>window.admin.operations.get().then(setConfig);void load();return window.admin.sync.onStartupPullSettled(()=>void load());},[]);
-  if(!config)return <Empty text="Loading operations settings..."/>;
-  const set=(section:keyof RuntimeConfig,values:any)=>setConfig({...config,[section]:{...(config as any)[section],...values}});
-  const updateAnnouncement=(id:string,values:any)=>setConfig({...config,announcements:{...config.announcements,items:config.announcements.items.map((item,index)=>item.id===id?{...item,...values,enabled:index<config.announcements.maxAnnouncements?(values.enabled??item.enabled):false}:item)}});
-  const reorder=(id:string,target:string)=>{const items=[...config.announcements.items],from=items.findIndex((item)=>item.id===id),to=items.findIndex((item)=>item.id===target);if(from<0||to<0||from===to)return;const [item]=items.splice(from,1);items.splice(to,0,item);setConfig({...config,announcements:{...config.announcements,items:items.map((entry,index)=>index<config.announcements.maxAnnouncements?entry:{...entry,enabled:false})}});};
-  const move=(id:string,delta:number)=>{const index=config.announcements.items.findIndex((item)=>item.id===id),target=config.announcements.items[index+delta];if(target)reorder(id,target.id);};
-  const limit=(value:number)=>setConfig({...config,announcements:{maxAnnouncements:Number.isInteger(value)&&value>=1&&value<=6?value:6,items:config.announcements.items.map((item,index)=>index<value?item:{...item,enabled:false})}});
-  const add=()=>{if(config.announcements.items.length>=config.announcements.maxAnnouncements)return;setConfig({...config,announcements:{...config.announcements,items:[...config.announcements.items,{id:`announcement-${crypto.randomUUID()}`,enabled:false,title:"",message:"",linkLabel:"",linkUrl:"",startsAt:null,endsAt:null,theme:"cocoa"}]}});};
-  const local=(value:string|null)=>value?new Date(new Date(value).getTime()-new Date(value).getTimezoneOffset()*60000).toISOString().slice(0,16):"";
-  async function save(){if(!config)return;await window.admin.operations.save(config);notify("Operations settings saved locally. Push from Sync Centre to update Neon.");}
-  return <div className="operations-page"><h2>Run the kitchen from one place.</h2>
-    <details className="operations-accordion" open><summary><strong>Announcements</strong><small>{config.announcements.items.filter((item)=>item.enabled).length} enabled · {config.announcements.items.length} configured</small></summary><div className="accordion-body"><div className="operations-toolbar"><label>MAX_ANNOUNCEMENTS<input type="number" min="1" max="6" value={config.announcements.maxAnnouncements} onChange={(event)=>limit(Number(event.target.value))}/></label><button disabled={config.announcements.items.length>=config.announcements.maxAnnouncements} onClick={add}>+ Add announcement</button></div><div className="announcement-list">{config.announcements.items.map((item,index)=><article key={item.id} draggable onDragStart={()=>setDragged(item.id)} onDragOver={(event)=>event.preventDefault()} onDrop={()=>{if(dragged)reorder(dragged,item.id);setDragged(null);}}><header><button className="drag-handle" aria-label={`Drag ${item.title||`announcement ${index+1}`}`}>⠿</button><strong>{index+1}. {item.title||"Untitled announcement"}</strong><label className="announcement-toggle"><input type="checkbox" disabled={index>=config.announcements.maxAnnouncements} checked={item.enabled} onChange={(event)=>updateAnnouncement(item.id,{enabled:event.target.checked})}/>Show</label></header><div className="announcement-grid"><label>Short heading<input maxLength={80} value={item.title} onChange={(event)=>updateAnnouncement(item.id,{title:event.target.value})}/></label><label>Theme<select value={item.theme} onChange={(event)=>updateAnnouncement(item.id,{theme:event.target.value})}>{["saffron","rose","leaf","plum","cocoa","sunrise"].map((theme)=><option key={theme}>{theme}</option>)}</select></label><label className="announcement-message">Message<textarea required={item.enabled} maxLength={280} rows={3} value={item.message} onChange={(event)=>updateAnnouncement(item.id,{message:event.target.value})}/><small>{item.message.length} / 280</small></label><label>Show from<input type="datetime-local" value={local(item.startsAt)} onChange={(event)=>updateAnnouncement(item.id,{startsAt:event.target.value?new Date(event.target.value).toISOString():null})}/></label><label>Show until<input type="datetime-local" value={local(item.endsAt)} onChange={(event)=>updateAnnouncement(item.id,{endsAt:event.target.value?new Date(event.target.value).toISOString():null})}/></label><label>Link label<input maxLength={40} value={item.linkLabel} onChange={(event)=>updateAnnouncement(item.id,{linkLabel:event.target.value})}/></label><label>HTTPS link<input type="url" value={item.linkUrl} onChange={(event)=>updateAnnouncement(item.id,{linkUrl:event.target.value})}/></label></div><footer><button disabled={!index} onClick={()=>move(item.id,-1)}>Move up</button><button disabled={index===config.announcements.items.length-1} onClick={()=>move(item.id,1)}>Move down</button><button className="danger" onClick={()=>setConfig({...config,announcements:{...config.announcements,items:config.announcements.items.filter((entry)=>entry.id!==item.id)}})}>Remove</button></footer></article>)}</div></div></details>
-    <details className="operations-accordion" open><summary><strong>Availability &amp; fulfilment</strong><small>{config.operations.open?"Accepting pre-orders":"Closed"}</small></summary><div className="accordion-body"><PreorderWindowFields config={config} setConfig={setConfig}/><ClosureFields config={config} setConfig={setConfig}/><button disabled={!config.operations.closurePeriod&&config.operations.open} onClick={()=>setConfig({...config,operations:{...config.operations,open:true,closurePeriod:null}})}>Clear scheduled closure</button><div className="toggle-grid"><label><input type="checkbox" checked={config.operations.open} onChange={(event)=>set("operations",{open:event.target.checked})}/>Accepting pre-orders</label><label><input type="checkbox" checked={config.operations.pickupEnabled} onChange={(event)=>set("operations",{pickupEnabled:event.target.checked})}/>Pickup enabled</label><label><input type="checkbox" checked={config.operations.deliveryEnabled} onChange={(event)=>set("operations",{deliveryEnabled:event.target.checked})}/>Delivery enabled</label></div><label>Status message<textarea value={config.operations.message} onChange={(event)=>set("operations",{message:event.target.value})}/></label></div></details>
-    <details className="operations-accordion" open><summary><strong>Enquiry configuration</strong><small>Up to {config.operations.maxPartyBulkGuests??25} Party/Bulk guests</small></summary><div className="accordion-body form-grid"><label>Maximum Party/Bulk guests<input type="number" min="1" max="500" required value={config.operations.maxPartyBulkGuests??25} onChange={(event)=>set("operations",{maxPartyBulkGuests:Number(event.target.value)})}/><small>Applies to website copy and server validation. Save locally, then push Operations from Sync Centre to update Neon.</small></label><label>Backup notification email<input type="email" maxLength={254} placeholder="orders@gruhswad.example" value={config.notifications.backupEmail} onChange={(event)=>setConfig({...config,notifications:{backupEmail:event.target.value}})}/><small>Receives a backup after persisted preorders and enquiries. Leave blank to disable. Save locally, then push through Sync Centre.</small></label></div></details>
-    <details className="operations-accordion"><summary><strong>Contact and site</strong><small>{config.site.mobile}</small></summary><div className="accordion-body form-grid"><label>Brand name<input value={config.site.brandName} onChange={(event)=>set("site",{brandName:event.target.value})}/></label><label>Tagline<input value={config.site.tagline} onChange={(event)=>set("site",{tagline:event.target.value})}/></label><label>Mobile<input value={config.site.mobile} onChange={(event)=>set("site",{mobile:event.target.value.replace(/\D/g,"").slice(0,10)})}/></label><label>Order cutoff<input value={config.site.orderCutoff} onChange={(event)=>set("site",{orderCutoff:event.target.value})}/></label></div></details>
-    <details className="operations-accordion"><summary><strong>Service area</strong><small>{config.serviceArea.pickupCities.join(", ")}</small></summary><div className="accordion-body form-grid"><label>Pickup cities<input value={config.serviceArea.pickupCities.join(", ")} onChange={(event)=>set("serviceArea",{pickupCities:event.target.value.split(",").map((value)=>value.trim()).filter(Boolean)})}/></label><label>Pickup state<input value={config.serviceArea.pickupState} onChange={(event)=>set("serviceArea",{pickupState:event.target.value})}/></label><label>Country<input value={config.serviceArea.pickupCountry} onChange={(event)=>set("serviceArea",{pickupCountry:event.target.value})}/></label><label>Kitchen Place ID<input value={config.serviceArea.kitchenPlaceId} onChange={(event)=>set("serviceArea",{kitchenPlaceId:event.target.value})}/></label><label>Latitude<input type="number" value={config.serviceArea.kitchenLatitude??""} onChange={(event)=>set("serviceArea",{kitchenLatitude:event.target.value?Number(event.target.value):null})}/></label><label>Longitude<input type="number" value={config.serviceArea.kitchenLongitude??""} onChange={(event)=>set("serviceArea",{kitchenLongitude:event.target.value?Number(event.target.value):null})}/></label><label>Delivery radius<input type="number" min=".1" value={config.serviceArea.deliveryRadiusKm} onChange={(event)=>set("serviceArea",{deliveryRadiusKm:Number(event.target.value)})}/></label></div></details>
-    <details className="operations-accordion"><summary><strong>Ordering platforms</strong><small>{config.orderingPlatforms.length} configured</small></summary><div className="accordion-body"><button onClick={()=>setConfig({...config,orderingPlatforms:[...config.orderingPlatforms,{id:`platform-${crypto.randomUUID()}`,name:"New platform",description:"",url:"",status:"coming-soon",order:config.orderingPlatforms.length+1}]})}>+ Add platform</button><div className="platform-admin-list">{config.orderingPlatforms.map((platform,index)=><article key={platform.id}><div className="platform-fields"><label>Name<input value={platform.name} onChange={(event)=>{const rows=[...config.orderingPlatforms];rows[index]={...platform,name:event.target.value};setConfig({...config,orderingPlatforms:rows});}}/></label><label>Status<select value={platform.status} onChange={(event)=>{const rows=[...config.orderingPlatforms];rows[index]={...platform,status:event.target.value as any};setConfig({...config,orderingPlatforms:rows});}}><option value="available">Available</option><option value="coming-soon">Coming soon</option><option value="hidden">Hidden</option></select></label><label>Description<input value={platform.description} onChange={(event)=>{const rows=[...config.orderingPlatforms];rows[index]={...platform,description:event.target.value};setConfig({...config,orderingPlatforms:rows});}}/></label><label>URL<input value={platform.url} onChange={(event)=>{const rows=[...config.orderingPlatforms];rows[index]={...platform,url:event.target.value};setConfig({...config,orderingPlatforms:rows});}}/></label><button className="danger" onClick={()=>setConfig({...config,orderingPlatforms:config.orderingPlatforms.filter((entry)=>entry.id!==platform.id)})}>Remove</button></div></article>)}</div></div></details>
-    <details className="operations-accordion"><summary><strong>Public location</strong><small>{config.publicLocation.enabled?"Visible":"Hidden"}</small></summary><div className="accordion-body form-grid"><label className="check"><input type="checkbox" checked={config.publicLocation.enabled} onChange={(event)=>set("publicLocation",{enabled:event.target.checked})}/>Show publicly</label><label>Name<input value={config.publicLocation.name} onChange={(event)=>set("publicLocation",{name:event.target.value})}/></label><label>Address<textarea value={config.publicLocation.address} onChange={(event)=>set("publicLocation",{address:event.target.value,mapQuery:event.target.value})}/></label><label>Directions<textarea value={config.publicLocation.directions} onChange={(event)=>set("publicLocation",{directions:event.target.value})}/></label><label>Google Maps URL<input value={config.publicLocation.googleMapsUrl} onChange={(event)=>set("publicLocation",{googleMapsUrl:event.target.value})}/></label></div></details>
-    <button className="primary save-operations" onClick={()=>save().catch((error)=>notify(error.message))}>Save operations</button></div>;
+  const [config, setConfig] = useState<RuntimeConfig | null>(null);
+  const [dragged, setDragged] = useState<string | null>(null);
+  useEffect(() => {
+    const load = () => window.admin.operations.get().then(setConfig);
+    void load();
+    return window.admin.sync.onStartupPullSettled(() => void load());
+  }, []);
+  if (!config) return <Empty text="Loading operations settings..." />;
+  const set = (section: keyof RuntimeConfig, values: any) =>
+    setConfig({
+      ...config,
+      [section]: { ...(config as any)[section], ...values },
+    });
+  const updateAnnouncement = (id: string, values: any) =>
+    setConfig({
+      ...config,
+      announcements: {
+        ...config.announcements,
+        items: config.announcements.items.map((item, index) =>
+          item.id === id
+            ? {
+                ...item,
+                ...values,
+                enabled:
+                  index < config.announcements.maxAnnouncements
+                    ? (values.enabled ?? item.enabled)
+                    : false,
+              }
+            : item,
+        ),
+      },
+    });
+  const reorder = (id: string, target: string) => {
+    const items = [...config.announcements.items],
+      from = items.findIndex((item) => item.id === id),
+      to = items.findIndex((item) => item.id === target);
+    if (from < 0 || to < 0 || from === to) return;
+    const [item] = items.splice(from, 1);
+    items.splice(to, 0, item);
+    setConfig({
+      ...config,
+      announcements: {
+        ...config.announcements,
+        items: items.map((entry, index) =>
+          index < config.announcements.maxAnnouncements
+            ? entry
+            : { ...entry, enabled: false },
+        ),
+      },
+    });
+  };
+  const move = (id: string, delta: number) => {
+    const index = config.announcements.items.findIndex(
+        (item) => item.id === id,
+      ),
+      target = config.announcements.items[index + delta];
+    if (target) reorder(id, target.id);
+  };
+  const limit = (value: number) =>
+    setConfig({
+      ...config,
+      announcements: {
+        maxAnnouncements:
+          Number.isInteger(value) && value >= 1 && value <= 6 ? value : 6,
+        items: config.announcements.items.map((item, index) =>
+          index < value ? item : { ...item, enabled: false },
+        ),
+      },
+    });
+  const add = () => {
+    if (
+      config.announcements.items.length >= config.announcements.maxAnnouncements
+    )
+      return;
+    setConfig({
+      ...config,
+      announcements: {
+        ...config.announcements,
+        items: [
+          ...config.announcements.items,
+          {
+            id: `announcement-${crypto.randomUUID()}`,
+            enabled: false,
+            title: "",
+            message: "",
+            linkLabel: "",
+            linkUrl: "",
+            startsAt: null,
+            endsAt: null,
+            theme: "cocoa",
+          },
+        ],
+      },
+    });
+  };
+  const local = (value: string | null) =>
+    value
+      ? new Date(
+          new Date(value).getTime() -
+            new Date(value).getTimezoneOffset() * 60000,
+        )
+          .toISOString()
+          .slice(0, 16)
+      : "";
+  async function save() {
+    if (!config) return;
+    await window.admin.operations.save(config);
+    notify(
+      "Operations settings saved locally. Push from Sync Centre to update Neon.",
+    );
+  }
+  return (
+    <div className="operations-page">
+      <h2>Run the kitchen from one place.</h2>
+      <details className="operations-accordion" open>
+        <summary>
+          <strong>Announcements</strong>
+          <small>
+            {config.announcements.items.filter((item) => item.enabled).length}{" "}
+            enabled · {config.announcements.items.length} configured
+          </small>
+        </summary>
+        <div className="accordion-body">
+          <div className="operations-toolbar">
+            <label>
+              MAX_ANNOUNCEMENTS
+              <input
+                type="number"
+                min="1"
+                max="6"
+                value={config.announcements.maxAnnouncements}
+                onChange={(event) => limit(Number(event.target.value))}
+              />
+            </label>
+            <button
+              disabled={
+                config.announcements.items.length >=
+                config.announcements.maxAnnouncements
+              }
+              onClick={add}
+            >
+              + Add announcement
+            </button>
+          </div>
+          <div className="announcement-list">
+            {config.announcements.items.map((item, index) => (
+              <article
+                key={item.id}
+                draggable
+                onDragStart={() => setDragged(item.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (dragged) reorder(dragged, item.id);
+                  setDragged(null);
+                }}
+              >
+                <header>
+                  <button
+                    className="drag-handle"
+                    aria-label={`Drag ${item.title || `announcement ${index + 1}`}`}
+                  >
+                    ⠿
+                  </button>
+                  <strong>
+                    {index + 1}. {item.title || "Untitled announcement"}
+                  </strong>
+                  <label className="announcement-toggle">
+                    <input
+                      type="checkbox"
+                      disabled={index >= config.announcements.maxAnnouncements}
+                      checked={item.enabled}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          enabled: event.target.checked,
+                        })
+                      }
+                    />
+                    Show
+                  </label>
+                </header>
+                <div className="announcement-grid">
+                  <label>
+                    Short heading
+                    <input
+                      maxLength={80}
+                      value={item.title}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          title: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Theme
+                    <select
+                      value={item.theme}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          theme: event.target.value,
+                        })
+                      }
+                    >
+                      {[
+                        "saffron",
+                        "rose",
+                        "leaf",
+                        "plum",
+                        "cocoa",
+                        "sunrise",
+                      ].map((theme) => (
+                        <option key={theme}>{theme}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="announcement-message">
+                    Message
+                    <textarea
+                      required={item.enabled}
+                      maxLength={280}
+                      rows={3}
+                      value={item.message}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          message: event.target.value,
+                        })
+                      }
+                    />
+                    <small>{item.message.length} / 280</small>
+                  </label>
+                  <label>
+                    Show from
+                    <input
+                      type="datetime-local"
+                      value={local(item.startsAt)}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          startsAt: event.target.value
+                            ? new Date(event.target.value).toISOString()
+                            : null,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Show until
+                    <input
+                      type="datetime-local"
+                      value={local(item.endsAt)}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          endsAt: event.target.value
+                            ? new Date(event.target.value).toISOString()
+                            : null,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Link label
+                    <input
+                      maxLength={40}
+                      value={item.linkLabel}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          linkLabel: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    HTTPS link
+                    <input
+                      type="url"
+                      value={item.linkUrl}
+                      onChange={(event) =>
+                        updateAnnouncement(item.id, {
+                          linkUrl: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <footer>
+                  <button disabled={!index} onClick={() => move(item.id, -1)}>
+                    Move up
+                  </button>
+                  <button
+                    disabled={index === config.announcements.items.length - 1}
+                    onClick={() => move(item.id, 1)}
+                  >
+                    Move down
+                  </button>
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      setConfig({
+                        ...config,
+                        announcements: {
+                          ...config.announcements,
+                          items: config.announcements.items.filter(
+                            (entry) => entry.id !== item.id,
+                          ),
+                        },
+                      })
+                    }
+                  >
+                    Remove
+                  </button>
+                </footer>
+              </article>
+            ))}
+          </div>
+        </div>
+      </details>
+      <details className="operations-accordion" open>
+        <summary>
+          <strong>Availability &amp; fulfilment</strong>
+          <small>
+            {config.operations.open ? "Accepting pre-orders" : "Closed"}
+          </small>
+        </summary>
+        <div className="accordion-body">
+          <PreorderWindowFields config={config} setConfig={setConfig} />
+          <ClosureFields config={config} setConfig={setConfig} />
+          <button
+            disabled={
+              !config.operations.closurePeriod && config.operations.open
+            }
+            onClick={() =>
+              setConfig({
+                ...config,
+                operations: {
+                  ...config.operations,
+                  open: true,
+                  closurePeriod: null,
+                },
+              })
+            }
+          >
+            Clear scheduled closure
+          </button>
+          <div className="toggle-grid">
+            <label>
+              <input
+                type="checkbox"
+                checked={config.operations.open}
+                onChange={(event) =>
+                  set("operations", { open: event.target.checked })
+                }
+              />
+              Accepting pre-orders
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={config.operations.pickupEnabled}
+                onChange={(event) =>
+                  set("operations", { pickupEnabled: event.target.checked })
+                }
+              />
+              Pickup enabled
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={config.operations.deliveryEnabled}
+                onChange={(event) =>
+                  set("operations", { deliveryEnabled: event.target.checked })
+                }
+              />
+              Delivery enabled
+            </label>
+          </div>
+          <label>
+            Status message
+            <textarea
+              value={config.operations.message}
+              onChange={(event) =>
+                set("operations", { message: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      </details>
+      <details className="operations-accordion" open>
+        <summary>
+          <strong>Enquiry configuration</strong>
+          <small>
+            Standard capacity: {config.operations.maxPartyBulkGuests ?? 25} Party/Bulk guests
+          </small>
+        </summary>
+        <div className="accordion-body form-grid">
+          <label>
+            Standard Party/Bulk capacity
+            <input
+              type="number"
+              min="1"
+              max="500"
+              required
+              value={config.operations.maxPartyBulkGuests ?? 25}
+              onChange={(event) =>
+                set("operations", {
+                  maxPartyBulkGuests: Number(event.target.value),
+                })
+              }
+            />
+            <small>
+              The website accepts enquiry counts up to three times this value and clearly marks anything above this standard capacity as subject to feasibility confirmation on WhatsApp. Save locally, then push Operations from Sync Centre to update Neon.
+            </small>
+          </label>
+          <label>
+            Backup notification email
+            <input
+              type="email"
+              maxLength={254}
+              placeholder="orders@gruhswad.example"
+              value={config.notifications.backupEmail}
+              onChange={(event) =>
+                setConfig({
+                  ...config,
+                  notifications: { backupEmail: event.target.value },
+                })
+              }
+            />
+            <small>
+              Receives a backup after persisted preorders and enquiries. Leave
+              blank to disable. Save locally, then push through Sync Centre.
+            </small>
+          </label>
+        </div>
+      </details>
+      <details className="operations-accordion">
+        <summary>
+          <strong>Contact and site</strong>
+          <small>{config.site.mobile}</small>
+        </summary>
+        <div className="accordion-body form-grid">
+          <label>
+            Brand name
+            <input
+              value={config.site.brandName}
+              onChange={(event) =>
+                set("site", { brandName: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Tagline
+            <input
+              value={config.site.tagline}
+              onChange={(event) => set("site", { tagline: event.target.value })}
+            />
+          </label>
+          <label>
+            Mobile
+            <input
+              value={config.site.mobile}
+              onChange={(event) =>
+                set("site", {
+                  mobile: event.target.value.replace(/\D/g, "").slice(0, 10),
+                })
+              }
+            />
+          </label>
+          <label>
+            Order cutoff
+            <input
+              value={config.site.orderCutoff}
+              onChange={(event) =>
+                set("site", { orderCutoff: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      </details>
+      <details className="operations-accordion">
+        <summary>
+          <strong>Service area</strong>
+          <small>{config.serviceArea.pickupCities.join(", ")}</small>
+        </summary>
+        <div className="accordion-body form-grid">
+          <label>
+            Pickup cities
+            <input
+              value={config.serviceArea.pickupCities.join(", ")}
+              onChange={(event) =>
+                set("serviceArea", {
+                  pickupCities: event.target.value
+                    .split(",")
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </label>
+          <label>
+            Pickup state
+            <input
+              value={config.serviceArea.pickupState}
+              onChange={(event) =>
+                set("serviceArea", { pickupState: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Country
+            <input
+              value={config.serviceArea.pickupCountry}
+              onChange={(event) =>
+                set("serviceArea", { pickupCountry: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Kitchen Place ID
+            <input
+              value={config.serviceArea.kitchenPlaceId}
+              onChange={(event) =>
+                set("serviceArea", { kitchenPlaceId: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Latitude
+            <input
+              type="number"
+              value={config.serviceArea.kitchenLatitude ?? ""}
+              onChange={(event) =>
+                set("serviceArea", {
+                  kitchenLatitude: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+            />
+          </label>
+          <label>
+            Longitude
+            <input
+              type="number"
+              value={config.serviceArea.kitchenLongitude ?? ""}
+              onChange={(event) =>
+                set("serviceArea", {
+                  kitchenLongitude: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+            />
+          </label>
+          <label>
+            Delivery radius
+            <input
+              type="number"
+              min=".1"
+              value={config.serviceArea.deliveryRadiusKm}
+              onChange={(event) =>
+                set("serviceArea", {
+                  deliveryRadiusKm: Number(event.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+      </details>
+      <details className="operations-accordion">
+        <summary>
+          <strong>Ordering platforms</strong>
+          <small>{config.orderingPlatforms.length} configured</small>
+        </summary>
+        <div className="accordion-body">
+          <button
+            onClick={() =>
+              setConfig({
+                ...config,
+                orderingPlatforms: [
+                  ...config.orderingPlatforms,
+                  {
+                    id: `platform-${crypto.randomUUID()}`,
+                    name: "New platform",
+                    description: "",
+                    url: "",
+                    status: "coming-soon",
+                    order: config.orderingPlatforms.length + 1,
+                  },
+                ],
+              })
+            }
+          >
+            + Add platform
+          </button>
+          <div className="platform-admin-list">
+            {config.orderingPlatforms.map((platform, index) => (
+              <article key={platform.id}>
+                <div className="platform-fields">
+                  <label>
+                    Name
+                    <input
+                      value={platform.name}
+                      onChange={(event) => {
+                        const rows = [...config.orderingPlatforms];
+                        rows[index] = { ...platform, name: event.target.value };
+                        setConfig({ ...config, orderingPlatforms: rows });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      value={platform.status}
+                      onChange={(event) => {
+                        const rows = [...config.orderingPlatforms];
+                        rows[index] = {
+                          ...platform,
+                          status: event.target.value as any,
+                        };
+                        setConfig({ ...config, orderingPlatforms: rows });
+                      }}
+                    >
+                      <option value="available">Available</option>
+                      <option value="coming-soon">Coming soon</option>
+                      <option value="hidden">Hidden</option>
+                    </select>
+                  </label>
+                  <label>
+                    Description
+                    <input
+                      value={platform.description}
+                      onChange={(event) => {
+                        const rows = [...config.orderingPlatforms];
+                        rows[index] = {
+                          ...platform,
+                          description: event.target.value,
+                        };
+                        setConfig({ ...config, orderingPlatforms: rows });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    URL
+                    <input
+                      value={platform.url}
+                      onChange={(event) => {
+                        const rows = [...config.orderingPlatforms];
+                        rows[index] = { ...platform, url: event.target.value };
+                        setConfig({ ...config, orderingPlatforms: rows });
+                      }}
+                    />
+                  </label>
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      setConfig({
+                        ...config,
+                        orderingPlatforms: config.orderingPlatforms.filter(
+                          (entry) => entry.id !== platform.id,
+                        ),
+                      })
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </details>
+      <details className="operations-accordion">
+        <summary>
+          <strong>Public location</strong>
+          <small>{config.publicLocation.enabled ? "Visible" : "Hidden"}</small>
+        </summary>
+        <div className="accordion-body form-grid">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={config.publicLocation.enabled}
+              onChange={(event) =>
+                set("publicLocation", { enabled: event.target.checked })
+              }
+            />
+            Show publicly
+          </label>
+          <label>
+            Name
+            <input
+              value={config.publicLocation.name}
+              onChange={(event) =>
+                set("publicLocation", { name: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Address
+            <textarea
+              value={config.publicLocation.address}
+              onChange={(event) =>
+                set("publicLocation", {
+                  address: event.target.value,
+                  mapQuery: event.target.value,
+                })
+              }
+            />
+          </label>
+          <label>
+            Directions
+            <textarea
+              value={config.publicLocation.directions}
+              onChange={(event) =>
+                set("publicLocation", { directions: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Google Maps URL
+            <input
+              value={config.publicLocation.googleMapsUrl}
+              onChange={(event) =>
+                set("publicLocation", { googleMapsUrl: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      </details>
+      <button
+        className="primary save-operations"
+        onClick={() => save().catch((error) => notify(error.message))}
+      >
+        Save operations
+      </button>
+    </div>
+  );
 }
 
-function PreorderWindowFields({config,setConfig}:{config:RuntimeConfig;setConfig:(value:RuntimeConfig)=>void}){const window=config.operations.preorderWindow??{start:"00:00",end:"21:00"};return <div className="form-grid"><label>Opens at<input type="time" value={window.start} onChange={(event)=>setConfig({...config,operations:{...config.operations,preorderWindow:{...window,start:event.target.value}}})}/></label><label>Closes at<input type="time" value={window.end} onChange={(event)=>setConfig({...config,operations:{...config.operations,preorderWindow:{...window,end:event.target.value}}})}/></label></div>}
-function ClosureFields({config,setConfig}:{config:RuntimeConfig;setConfig:(value:RuntimeConfig)=>void}){const period=config.operations.closurePeriod;return <div className="form-grid"><label>Closure date<input type="date" value={period?.startDate??""} onChange={(event)=>setConfig({...config,operations:{...config.operations,closurePeriod:event.target.value?{startDate:event.target.value,endDate:event.target.value}:null}})}/></label><label>Closure end<input type="date" min={period?.startDate} value={period?.endDate===period?.startDate?"":period?.endDate??""} onChange={(event)=>period&&setConfig({...config,operations:{...config.operations,closurePeriod:{...period,endDate:event.target.value||period.startDate}}})}/></label></div>}
+function PreorderWindowFields({
+  config,
+  setConfig,
+}: {
+  config: RuntimeConfig;
+  setConfig: (value: RuntimeConfig) => void;
+}) {
+  const window = config.operations.preorderWindow ?? {
+    start: "00:00",
+    end: "21:00",
+  };
+  return (
+    <div className="form-grid">
+      <label>
+        Opens at
+        <input
+          type="time"
+          value={window.start}
+          onChange={(event) =>
+            setConfig({
+              ...config,
+              operations: {
+                ...config.operations,
+                preorderWindow: { ...window, start: event.target.value },
+              },
+            })
+          }
+        />
+      </label>
+      <label>
+        Closes at
+        <input
+          type="time"
+          value={window.end}
+          onChange={(event) =>
+            setConfig({
+              ...config,
+              operations: {
+                ...config.operations,
+                preorderWindow: { ...window, end: event.target.value },
+              },
+            })
+          }
+        />
+      </label>
+    </div>
+  );
+}
+function ClosureFields({
+  config,
+  setConfig,
+}: {
+  config: RuntimeConfig;
+  setConfig: (value: RuntimeConfig) => void;
+}) {
+  const period = config.operations.closurePeriod;
+  return (
+    <div className="form-grid">
+      <label>
+        Closure date
+        <input
+          type="date"
+          value={period?.startDate ?? ""}
+          onChange={(event) =>
+            setConfig({
+              ...config,
+              operations: {
+                ...config.operations,
+                closurePeriod: event.target.value
+                  ? {
+                      startDate: event.target.value,
+                      endDate: event.target.value,
+                    }
+                  : null,
+              },
+            })
+          }
+        />
+      </label>
+      <label>
+        Closure end
+        <input
+          type="date"
+          min={period?.startDate}
+          value={
+            period?.endDate === period?.startDate ? "" : (period?.endDate ?? "")
+          }
+          onChange={(event) =>
+            period &&
+            setConfig({
+              ...config,
+              operations: {
+                ...config.operations,
+                closurePeriod: {
+                  ...period,
+                  endDate: event.target.value || period.startDate,
+                },
+              },
+            })
+          }
+        />
+      </label>
+    </div>
+  );
+}
 
 function PreviewCard({ value }: { value: SyncPreview | PushPreview | null }) {
-  if (!value) return <div className="preview-card"><span>Run preview before syncing.</span></div>;
+  if (!value)
+    return (
+      <div className="preview-card">
+        <span>Run preview before syncing.</span>
+      </div>
+    );
   const push = "pushableDirty" in value ? value : null;
-  return <div className="preview-card">{push ? <><div className="push-counts"><b>{push.pushableDirty}<small>Pushable</small></b><b>{push.excludedDirty}<small>Local-only / excluded</small></b></div><div className="push-sections"><span>Orders <b>{push.sections.orders}</b></span><span>Customers <b>{push.sections.customers}</b></span><span>Catalog <b>{push.sections.catalog}</b></span><span>Menu publication <b>{push.sections.menu}</b></span><span>Operations <b>{push.sections.operations}</b></span></div><span>{push.conflicts} conflicts in pushable records</span></> : <><span>{value.inserts} inserts / {value.updates} updates</span><span>{value.conflicts} conflicts / {value.dirty} dirty</span></>}<small>{value.entities.slice(0, 20).map((entry) => entry.action + ": " + entry.type + "/" + entry.id).join("\n") || "No changes"}</small></div>;
+  return (
+    <div className="preview-card">
+      {push ? (
+        <>
+          <div className="push-counts">
+            <b>
+              {push.pushableDirty}
+              <small>Pushable</small>
+            </b>
+            <b>
+              {push.excludedDirty}
+              <small>Local-only / excluded</small>
+            </b>
+          </div>
+          <div className="push-sections">
+            <span>
+              Orders <b>{push.sections.orders}</b>
+            </span>
+            <span>
+              Customers <b>{push.sections.customers}</b>
+            </span>
+            <span>
+              Catalog <b>{push.sections.catalog}</b>
+            </span>
+            <span>
+              Menu publication <b>{push.sections.menu}</b>
+            </span>
+            <span>
+              Operations <b>{push.sections.operations}</b>
+            </span>
+          </div>
+          <span>{push.conflicts} conflicts in pushable records</span>
+        </>
+      ) : (
+        <>
+          <span>
+            {value.inserts} inserts / {value.updates} updates
+          </span>
+          <span>
+            {value.conflicts} conflicts / {value.dirty} dirty
+          </span>
+        </>
+      )}
+      <small>
+        {value.entities
+          .slice(0, 20)
+          .map((entry) => entry.action + ": " + entry.type + "/" + entry.id)
+          .join("\n") || "No changes"}
+      </small>
+    </div>
+  );
 }
 function SyncPage({ notify }: { notify: (message: string) => void }) {
-  const [status, setStatus] = useState<SyncStatus | null>(null); const [publishing, setPublishing] = useState<MenuImagePublicationStatus | null>(null); const [pull, setPull] = useState<SyncPreview | null>(null); const [push, setPush] = useState<PushPreview | null>(null); const [conflicts, setConflicts] = useState<any[]>([]); const [history, setHistory] = useState<any[]>([]); const [busy, setBusy] = useState(false);
-  const load = async () => { const [nextStatus, nextConflicts, nextHistory, nextPublishing] = await Promise.all([window.admin.sync.status(), window.admin.sync.conflicts(), window.admin.sync.history(),window.admin.menuPublishing.status()]); setStatus(nextStatus); setConflicts(nextConflicts); setHistory(nextHistory);setPublishing(nextPublishing); if(nextStatus.connection.error)notify(`Environment configuration error: ${nextStatus.connection.error}`); };
-  useEffect(() => { load().catch((error) => notify(error.message)); }, []);
-  async function run(kind: "pull" | "push") { setBusy(true); try { if (kind === "pull") setPull(await window.admin.sync.pull()); else setPush(await window.admin.sync.push()); await load(); notify((kind === "pull" ? "Pull" : "Push") + " completed."); } finally { setBusy(false); } }
-  async function publishImages(){setBusy(true);try{const result=await window.admin.menuPublishing.publish();await load();const uploaded=Object.values(result.menus).filter((menu)=>menu.action==="uploaded").length;notify(uploaded?`Menu images published to ${result.bucket}.`:"The latest menu images are already published.");}finally{setBusy(false);}}
-  const menuState=(type:"master"|"one-day")=>{const local=publishing?.local[type],cloud=publishing?.cloud[type];return <article><strong>{type==="master"?"Master menu":"One-day menu"}</strong><span>Local: {local?.state??"checking"}{local?.generatedAt?` / ${new Date(local.generatedAt).toLocaleString()}`:""} / {local?.pageCount??0} page(s)</span><span>Cloud: {cloud?`${new Date(cloud.publishedAt).toLocaleString()} / ${cloud.pageCount} page(s)`:"Not published"}</span></article>};
-  return <><section className="metric-grid"><Metric label="Connection" value={status?.online ? "Online" : "Offline"} tone={status?.online ? "green" : "red"} /><Metric label="Dirty records" value={String(status?.dirty ?? 0)} tone="gold" /><Metric label="Open conflicts" value={String(status?.conflicts ?? 0)} tone="red" /></section><section className="sync-grid"><Panel title="Pull Neon to SQLite" action={<button disabled={busy} onClick={async () => setPull(await window.admin.sync.previewPull())}>Preview</button>}><PreviewCard value={pull} /><button className="primary" disabled={busy || !pull} onClick={() => run("pull").catch((error) => notify(error.message))}>Pull from Neon</button></Panel><Panel title="Push SQLite to Neon" action={<button disabled={busy} onClick={async () => setPush(await window.admin.sync.previewPush())}>Preview</button>}><PreviewCard value={push} /><button className="primary" disabled={busy || !push || push.pushableDirty === 0 || push.conflicts > 0} onClick={() => run("push").catch((error) => notify(error.message))}>Push to Neon</button></Panel></section><Panel title="Publish Menu Images"><p className="muted">Upload the latest verified master and one-day menu exports to {publishing?.bucket??"fb-image-store"}.</p><div className="menu-publish-status">{menuState("master")}{menuState("one-day")}</div>{publishing?.error&&<p className="error-copy">Cloud status: {publishing.error}</p>}<button className="primary" disabled={busy||!publishing?.ready} onClick={()=>publishImages().catch((error)=>notify(`Menu image publishing failed: ${error.message}`))}>{busy?"Working...":"Publish Menu Images"}</button>{!publishing?.configured&&<small>Import Google Cloud credentials under Settings first.</small>}</Panel><section className="split"><Panel title="Conflict review">{conflicts.length ? <div className="conflict-list">{conflicts.map((row) => <article key={row.id}><b>{row.entity_type} / {row.entity_id}</b><span>Both SQLite and Neon changed this record.</span><div><button onClick={async () => { await window.admin.sync.resolve(row.id, "local"); load(); }}>Keep SQLite</button><button onClick={async () => { await window.admin.sync.resolve(row.id, "neon"); load(); }}>Use Neon</button></div></article>)}</div> : <Empty text="No unresolved conflicts." />}</Panel><Panel title="Sync audit history"><DataTable rows={history} columns={[["started_at", "Started"], ["direction", "Direction"], ["status", "Status"], ["summary", "Summary"]]} /></Panel></section></>;
+  const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [publishing, setPublishing] =
+    useState<MenuImagePublicationStatus | null>(null);
+  const [pull, setPull] = useState<SyncPreview | null>(null);
+  const [push, setPush] = useState<PushPreview | null>(null);
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const [nextStatus, nextConflicts, nextHistory, nextPublishing] =
+      await Promise.all([
+        window.admin.sync.status(),
+        window.admin.sync.conflicts(),
+        window.admin.sync.history(),
+        window.admin.menuPublishing.status(),
+      ]);
+    setStatus(nextStatus);
+    setConflicts(nextConflicts);
+    setHistory(nextHistory);
+    setPublishing(nextPublishing);
+    if (nextStatus.connection.error)
+      notify(`Environment configuration error: ${nextStatus.connection.error}`);
+  };
+  useEffect(() => {
+    load().catch((error) => notify(error.message));
+  }, []);
+  async function run(kind: "pull" | "push") {
+    setBusy(true);
+    try {
+      if (kind === "pull") setPull(await window.admin.sync.pull());
+      else setPush(await window.admin.sync.push());
+      await load();
+      notify((kind === "pull" ? "Pull" : "Push") + " completed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function publishImages() {
+    setBusy(true);
+    try {
+      const result = await window.admin.menuPublishing.publish();
+      await load();
+      const uploaded = Object.values(result.menus).filter(
+        (menu) => menu.action === "uploaded",
+      ).length;
+      notify(
+        uploaded
+          ? `Menu images published to ${result.bucket}.`
+          : "The latest menu images are already published.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  const menuState = (type: "master" | "one-day") => {
+    const local = publishing?.local[type],
+      cloud = publishing?.cloud[type];
+    return (
+      <article>
+        <strong>{type === "master" ? "Master menu" : "One-day menu"}</strong>
+        <span>
+          Local: {local?.state ?? "checking"}
+          {local?.generatedAt
+            ? ` / ${new Date(local.generatedAt).toLocaleString()}`
+            : ""}{" "}
+          / {local?.pageCount ?? 0} page(s)
+        </span>
+        <span>
+          Cloud:{" "}
+          {cloud
+            ? `${new Date(cloud.publishedAt).toLocaleString()} / ${cloud.pageCount} page(s)`
+            : "Not published"}
+        </span>
+      </article>
+    );
+  };
+  return (
+    <>
+      <section className="metric-grid">
+        <Metric
+          label="Connection"
+          value={status?.online ? "Online" : "Offline"}
+          tone={status?.online ? "green" : "red"}
+        />
+        <Metric
+          label="Dirty records"
+          value={String(status?.dirty ?? 0)}
+          tone="gold"
+        />
+        <Metric
+          label="Open conflicts"
+          value={String(status?.conflicts ?? 0)}
+          tone="red"
+        />
+      </section>
+      <section className="sync-grid">
+        <Panel
+          title="Pull Neon to SQLite"
+          action={
+            <button
+              disabled={busy}
+              onClick={async () =>
+                setPull(await window.admin.sync.previewPull())
+              }
+            >
+              Preview
+            </button>
+          }
+        >
+          <PreviewCard value={pull} />
+          <button
+            className="primary"
+            disabled={busy || !pull}
+            onClick={() => run("pull").catch((error) => notify(error.message))}
+          >
+            Pull from Neon
+          </button>
+        </Panel>
+        <Panel
+          title="Push SQLite to Neon"
+          action={
+            <button
+              disabled={busy}
+              onClick={async () =>
+                setPush(await window.admin.sync.previewPush())
+              }
+            >
+              Preview
+            </button>
+          }
+        >
+          <PreviewCard value={push} />
+          <button
+            className="primary"
+            disabled={
+              busy || !push || push.pushableDirty === 0 || push.conflicts > 0
+            }
+            onClick={() => run("push").catch((error) => notify(error.message))}
+          >
+            Push to Neon
+          </button>
+        </Panel>
+      </section>
+      <Panel title="Publish Menu Images">
+        <p className="muted">
+          Upload the latest verified master and one-day menu exports to{" "}
+          {publishing?.bucket ?? "fb-image-store"}.
+        </p>
+        <div className="menu-publish-status">
+          {menuState("master")}
+          {menuState("one-day")}
+        </div>
+        {publishing?.error && (
+          <p className="error-copy">Cloud status: {publishing.error}</p>
+        )}
+        <button
+          className="primary"
+          disabled={busy || !publishing?.ready}
+          onClick={() =>
+            publishImages().catch((error) =>
+              notify(`Menu image publishing failed: ${error.message}`),
+            )
+          }
+        >
+          {busy ? "Working..." : "Publish Menu Images"}
+        </button>
+        {!publishing?.configured && (
+          <small>Import Google Cloud credentials under Settings first.</small>
+        )}
+      </Panel>
+      <section className="split">
+        <Panel title="Conflict review">
+          {conflicts.length ? (
+            <div className="conflict-list">
+              {conflicts.map((row) => (
+                <article key={row.id}>
+                  <b>
+                    {row.entity_type} / {row.entity_id}
+                  </b>
+                  <span>Both SQLite and Neon changed this record.</span>
+                  <div>
+                    <button
+                      onClick={async () => {
+                        await window.admin.sync.resolve(row.id, "local");
+                        load();
+                      }}
+                    >
+                      Keep SQLite
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await window.admin.sync.resolve(row.id, "neon");
+                        load();
+                      }}
+                    >
+                      Use Neon
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <Empty text="No unresolved conflicts." />
+          )}
+        </Panel>
+        <Panel title="Sync audit history">
+          <DataTable
+            rows={history}
+            columns={[
+              ["started_at", "Started"],
+              ["direction", "Direction"],
+              ["status", "Status"],
+              ["summary", "Summary"],
+            ]}
+          />
+        </Panel>
+      </section>
+    </>
+  );
 }
 
 function InboxPage({ notify }: { notify: (message: string) => void }) {
-  const [rows, setRows] = useState<any[]>([]); const load = () => window.admin.inbox.list().then(setRows); useEffect(() => { load(); }, []);
-  return <Panel title="WhatsApp Business inbox" action={<button className="primary" onClick={async () => { const result = await window.admin.inbox.sync(); load(); notify(`${result.imported} structured orders, ${result.unmatched} unmatched messages synced.`); }}>Sync inbox</button>}><DataTable rows={rows} columns={[["received_at", "Received"], ["sender", "Sender"], ["status", "Status"], ["message", "Message"]]} /></Panel>;
+  const [rows, setRows] = useState<any[]>([]);
+  const load = () => window.admin.inbox.list().then(setRows);
+  useEffect(() => {
+    load();
+  }, []);
+  return (
+    <Panel
+      title="WhatsApp Business inbox"
+      action={
+        <button
+          className="primary"
+          onClick={async () => {
+            const result = await window.admin.inbox.sync();
+            load();
+            notify(
+              `${result.imported} structured orders, ${result.unmatched} unmatched messages synced.`,
+            );
+          }}
+        >
+          Sync inbox
+        </button>
+      }
+    >
+      <DataTable
+        rows={rows}
+        columns={[
+          ["received_at", "Received"],
+          ["sender", "Sender"],
+          ["status", "Status"],
+          ["message", "Message"],
+        ]}
+      />
+    </Panel>
+  );
+}
+
+function PortableBackupSetting({ notify }: { notify(message: string): void }) {
+  const [summary, setSummary] = useState<any>(null),
+    [password, setPassword] = useState(""),
+    [confirmation, setConfirmation] = useState(""),
+    [importPassword, setImportPassword] = useState(""),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void window.admin.settings.portableSummary().then(setSummary);
+  }, []);
+  async function exportAll() {
+    if (password.length < 10)
+      throw new Error(
+        "Use a backup password containing at least 10 characters.",
+      );
+    if (password !== confirmation)
+      throw new Error("Backup password confirmation does not match.");
+    if (
+      !confirm(
+        "Export both local profiles, complete settings, credentials, and retained receipts?",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const path = await window.admin.settings.exportPortable(password);
+      if (path) {
+        setPassword("");
+        setConfirmation("");
+        notify("Complete portable backup exported safely.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function importAll() {
+    if (importPassword.length < 10)
+      throw new Error("Enter the portable backup password.");
+    if (
+      !confirm(
+        "Import will replace both profiles after preserving timestamped safety copies, then relaunch the app. Continue?",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const value = await window.admin.settings.importPortable(importPassword);
+      if (value)
+        notify(
+          "Portable backup validated. Relaunching to apply the complete restore.",
+        );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel title="Complete portable backup">
+      <div className="portable-summary">
+        <p>
+          Includes both SQLite profiles, every SQLite-backed setting, connection
+          credentials, environment selection, profile selection, and retained
+          receipt attachments.
+        </p>
+        {summary?.profiles.map((profile: any) => (
+          <article key={profile.id}>
+            <strong>{profile.label}</strong>
+            <span>
+              {profile.database ? "SQLite included" : "No database"} /{" "}
+              {profile.secrets
+                ? "credentials included"
+                : "no saved credentials"}{" "}
+              / {profile.attachments} attachments
+            </span>
+          </article>
+        ))}
+        <div className="form-grid">
+          <label>
+            New backup password
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={10}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <label>
+            Confirm password
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={10}
+              value={confirmation}
+              onChange={(e) => setConfirmation(e.target.value)}
+            />
+          </label>
+        </div>
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => exportAll().catch((error) => notify(error.message))}
+        >
+          Export complete portable backup
+        </button>
+        <hr />
+        <label>
+          Portable backup password
+          <input
+            type="password"
+            autoComplete="current-password"
+            minLength={10}
+            value={importPassword}
+            onChange={(e) => setImportPassword(e.target.value)}
+          />
+        </label>
+        <button
+          disabled={busy}
+          onClick={() => importAll().catch((error) => notify(error.message))}
+        >
+          Import and relaunch
+        </button>
+        <p className="muted">
+          A forgotten portable-backup password cannot be recovered. Import never
+          pushes or pulls Neon automatically.
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function CredentialRepairSetting({
+  notify,
+}: {
+  notify(message: string): void;
+}) {
+  const [summary, setSummary] = useState<any>(null);
+  const load = () => window.admin.settings.portableSummary().then(setSummary);
+  useEffect(() => {
+    void load();
+  }, []);
+  const broken =
+    summary?.profiles?.filter(
+      (profile: any) => profile.credentialState === "unreadable",
+    ) ?? [];
+  if (!broken.length) return null;
+  async function archive(profile: any) {
+    if (
+      !confirm(
+        `${profile.label}'s old credential file cannot be decrypted. Archive it and continue without those unrecoverable values? Re-enter required credentials after switching to that profile.`,
+      )
+    )
+      return;
+    await window.admin.settings.archiveUnreadableCredentials(profile.id);
+    await load();
+    notify(
+      `${profile.label}'s unreadable credential file was preserved as a safety copy. Re-enter any required credentials for that profile.`,
+    );
+  }
+  return (
+    <Panel title="Credential repair required">
+      <div className="validation-message warning">
+        <strong>
+          Windows cannot decrypt credentials saved by the profiles below.
+        </strong>
+        <p>
+          Switch to the affected profile and re-enter its Neon, inbox, and GCS
+          credentials. If the old values are no longer needed, archive the
+          unreadable file first; the portable backup will truthfully omit those
+          unrecoverable credentials.
+        </p>
+      </div>
+      {broken.map((profile: any) => (
+        <article className="profile-card" key={profile.id}>
+          <div>
+            <strong>{profile.label}</strong>
+            <small>Saved credential file is unreadable</small>
+          </div>
+          <div className="modal-actions">
+            {profile.id !== summary.activeProfile ? (
+              <button
+                onClick={() =>
+                  window.admin.settings
+                    .switchProfile(profile.id)
+                    .catch((error) => notify(error.message))
+                }
+              >
+                Switch & restart to repair
+              </button>
+            ) : null}
+            <button
+              onClick={() =>
+                archive(profile).catch((error) => notify(error.message))
+              }
+            >
+              Archive unreadable file
+            </button>
+          </div>
+        </article>
+      ))}
+    </Panel>
+  );
 }
 
 function SettingsPage({ notify }: { notify: (message: string) => void }) {
-  const [form, setForm] = useState<any>({ webhookUrl: "", neonDatabaseUrl: "", inboxToken: "" }); const [update, setUpdate] = useState("");
-  useEffect(() => { window.admin.settings.get().then((value) => setForm((current: any) => ({ ...current, ...value }))); return window.admin.updates.onStatus(setUpdate); }, []);
-  async function save(event: React.FormEvent) { event.preventDefault(); await window.admin.settings.set({ webhookUrl: form.webhookUrl??"",gcsBucket:form.gcsBucket||"fb-image-store" }, { neonDatabaseUrl: form.neonDatabaseUrl, inboxToken: form.inboxToken }); const updated=await window.admin.settings.get(); setForm({ ...updated, neonDatabaseUrl: "", inboxToken: "" }); notify("Settings saved securely and are active."); }
-  async function importGcs(){const result=await window.admin.settings.importGcsCredentials();if(!result.canceled){const updated=await window.admin.settings.get();setForm((current:any)=>({...current,...updated}));notify("Google Cloud credentials imported and encrypted.");}}
-  return <section className="settings-grid"><Panel title="Connections"><form className="stack-form" onSubmit={save}><div className={form.hasNeonUrl ? "connection-ok" : "connection-warn"}>{form.hasNeonUrl ? "Neon database configured" : "Neon database not configured"}</div><label>Webhook URL<input value={form.webhookUrl ?? ""} onChange={(event) => setForm({ ...form, webhookUrl: event.target.value })} /></label><label>Neon database URL<input type="password" placeholder={form.hasNeonUrl ? "Saved securely - enter to replace" : "postgresql://..."} value={form.neonDatabaseUrl ?? ""} onChange={(event) => setForm({ ...form, neonDatabaseUrl: event.target.value })} /></label><label>Inbox API token<input type="password" placeholder={form.hasInboxToken ? "Saved securely - enter to replace" : "Token"} value={form.inboxToken ?? ""} onChange={(event) => setForm({ ...form, inboxToken: event.target.value })} /></label><label>Google Cloud bucket<input value={form.gcsBucket??"fb-image-store"} onChange={(event)=>setForm({...form,gcsBucket:event.target.value})}/></label><div className={form.hasGcsCredentials?"connection-ok":"connection-warn"}>{form.hasGcsCredentials?"Google Cloud credentials configured":"Google Cloud credentials not configured"}</div><button type="button" onClick={()=>importGcs().catch((error)=>notify(error.message))}>Import service-account JSON</button><button className="primary">Save settings</button></form></Panel><Panel title="Data safety"><div className="action-list"><button onClick={async () => { if (await window.admin.settings.backup()) notify("Encrypted backup saved."); }}>Create encrypted backup</button><button onClick={async () => { if (await window.admin.settings.restore()) notify("Backup staged. Restart to complete restore."); }}>Restore a backup</button></div></Panel><Panel title="Application updates"><p className="muted">{update || "Updates are delivered through signed GitHub Releases."}</p><button className="primary" onClick={() => window.admin.updates.check()}>Check for updates</button>{update === "update-downloaded" && <button onClick={() => window.admin.updates.install()}>Restart and install</button>}</Panel></section>;
+  const [form, setForm] = useState<any>({
+    webhookUrl: "",
+    neonDatabaseUrl: "",
+    inboxToken: "",
+  });
+  const [update, setUpdate] = useState("");
+  useEffect(() => {
+    window.admin.settings
+      .get()
+      .then((value) => setForm((current: any) => ({ ...current, ...value })));
+    return window.admin.updates.onStatus(setUpdate);
+  }, []);
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    await window.admin.settings.set(
+      {
+        webhookUrl: form.webhookUrl ?? "",
+        gcsBucket: form.gcsBucket || "fb-image-store",
+      },
+      { neonDatabaseUrl: form.neonDatabaseUrl, inboxToken: form.inboxToken },
+    );
+    const updated = await window.admin.settings.get();
+    setForm({ ...updated, neonDatabaseUrl: "", inboxToken: "" });
+    notify("Settings saved securely and are active.");
+  }
+  async function importGcs() {
+    const result = await window.admin.settings.importGcsCredentials();
+    if (!result.canceled) {
+      const updated = await window.admin.settings.get();
+      setForm((current: any) => ({ ...current, ...updated }));
+      notify("Google Cloud credentials imported and encrypted.");
+    }
+  }
+  return (
+    <section className="settings-grid">
+      <Panel title="Connections">
+        <form className="stack-form" onSubmit={save}>
+          <div
+            className={form.hasNeonUrl ? "connection-ok" : "connection-warn"}
+          >
+            {form.hasNeonUrl
+              ? "Neon database configured"
+              : "Neon database not configured"}
+          </div>
+          <label>
+            Webhook URL
+            <input
+              value={form.webhookUrl ?? ""}
+              onChange={(event) =>
+                setForm({ ...form, webhookUrl: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Neon database URL
+            <input
+              type="password"
+              placeholder={
+                form.hasNeonUrl
+                  ? "Saved securely - enter to replace"
+                  : "postgresql://..."
+              }
+              value={form.neonDatabaseUrl ?? ""}
+              onChange={(event) =>
+                setForm({ ...form, neonDatabaseUrl: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Inbox API token
+            <input
+              type="password"
+              placeholder={
+                form.hasInboxToken
+                  ? "Saved securely - enter to replace"
+                  : "Token"
+              }
+              value={form.inboxToken ?? ""}
+              onChange={(event) =>
+                setForm({ ...form, inboxToken: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Google Cloud bucket
+            <input
+              value={form.gcsBucket ?? "fb-image-store"}
+              onChange={(event) =>
+                setForm({ ...form, gcsBucket: event.target.value })
+              }
+            />
+          </label>
+          <div
+            className={
+              form.hasGcsCredentials ? "connection-ok" : "connection-warn"
+            }
+          >
+            {form.hasGcsCredentials
+              ? "Google Cloud credentials configured"
+              : "Google Cloud credentials not configured"}
+          </div>
+          <button
+            type="button"
+            onClick={() => importGcs().catch((error) => notify(error.message))}
+          >
+            Import service-account JSON
+          </button>
+          <button className="primary">Save settings</button>
+        </form>
+      </Panel>
+      <Panel title="Data safety">
+        <div className="action-list">
+          <button
+            onClick={async () => {
+              if (await window.admin.settings.backup())
+                notify("Encrypted backup saved.");
+            }}
+          >
+            Create encrypted backup
+          </button>
+          <button
+            onClick={async () => {
+              if (await window.admin.settings.restore())
+                notify("Backup staged. Restart to complete restore.");
+            }}
+          >
+            Restore a backup
+          </button>
+        </div>
+      </Panel>
+      <Panel title="Application updates">
+        <p className="muted">
+          {update || "Updates are delivered through signed GitHub Releases."}
+        </p>
+        <button
+          className="primary"
+          onClick={() => window.admin.updates.check()}
+        >
+          Check for updates
+        </button>
+        {update === "update-downloaded" && (
+          <button onClick={() => window.admin.updates.install()}>
+            Restart and install
+          </button>
+        )}
+      </Panel>
+    </section>
+  );
 }
 
-function NotificationSetting({notify}:{notify(message:string):void}){const[enabled,setEnabled]=useState(true),[capability,setCapability]=useState<Awaited<ReturnType<typeof window.admin.enquiries.notificationStatus>>|null>(null),[settings,setSettings]=useState<Awaited<ReturnType<typeof window.admin.settings.get>>|null>(null);const load=()=>window.admin.settings.get().then(setSettings);const loadCapability=()=>window.admin.enquiries.notificationStatus().then(value=>{setCapability(value);setEnabled(value.enabled)});useEffect(()=>{void loadCapability();void load()},[]);const profiles=settings?.localProfiles,connection=settings?.databaseConnection;async function clone(){const result=await window.admin.settings.cloneTestDatabase();await load();notify(result.safetyCopy?"Test database refreshed; the previous copy was preserved.":"Intensive-testing database created safely.")}async function testNotification(){const result=await window.admin.enquiries.testNotification();notify(result.outcome==="shown"?"Test notification shown. If it is not visible, check Windows notification settings.":result.outcome==="unsupported"?"Native notifications are not supported in this runtime.":"Windows could not show the test notification. Check notification permissions and Focus Assist.")}return <><Panel title="Local data profile"><div className="profile-summary"><div className={profiles?.active==="intensive-testing"?"testing-profile-banner":"connection-ok"}><strong>{profiles?.active==="intensive-testing"?"Intensive testing":"Production"}</strong><span>Active local SQLite profile</span></div><p className="muted">Neon environment: <strong>{connection?.environment??"unknown"}</strong> · source: <strong>{connection?.source??"none"}</strong></p>{profiles?.profiles.map(profile=><article className={`profile-card ${profile.id===profiles.active?"active":""}`} key={profile.id}><div><strong>{profile.label}</strong><code>{profile.databasePath}</code><small>{profile.exists?"Database available":"Database not created"}</small></div><button type="button" disabled={profile.id===profiles.active||!profile.exists} onClick={()=>window.admin.settings.switchProfile(profile.id).catch(error=>notify(error.message))}>{profile.id===profiles.active?"Active":"Switch & restart"}</button></article>)}{profiles?.active==="production"&&<button type="button" className="primary" onClick={()=>clone().catch(error=>notify(error.message))}>{profiles.profiles.find(profile=>profile.id==="intensive-testing")?.exists?"Refresh test copy from production":"Create test copy"}</button>}<p className="muted">The test profile uses DATABASE_URL_PROD for the designated least-privilege Neon child branch. Refreshing preserves the previous test database as a timestamped safety copy.</p></div></Panel><Panel title="Enquiry notifications"><label className="toggle"><input type="checkbox" checked={enabled} onChange={async(event)=>{const value=event.target.checked;setEnabled(value);await window.admin.enquiries.setPreference(value);await loadCapability();notify(`Enquiry notifications ${value?"enabled":"disabled"}.`)}}/> Show native notifications for newly persisted enquiries</label><p className="muted">Native support: <strong>{capability?.supported?"Available":"Unavailable"}</strong> · Runtime: <strong>{capability?.packaged?"Installed app":"Development"}</strong></p><button type="button" disabled={!capability?.supported} onClick={()=>testNotification().catch(error=>notify(error.message))}>Send test notification</button><p className="muted">Windows notification permissions and Focus Assist can override this preference. The Neon cursor and enquiry list continue updating while alerts are disabled or unavailable, so old alerts are not replayed.</p></Panel></>}
+function NotificationSetting({ notify }: { notify(message: string): void }) {
+  const [enabled, setEnabled] = useState(true),
+    [capability, setCapability] = useState<Awaited<
+      ReturnType<typeof window.admin.enquiries.notificationStatus>
+    > | null>(null),
+    [settings, setSettings] = useState<Awaited<
+      ReturnType<typeof window.admin.settings.get>
+    > | null>(null);
+  const load = () => window.admin.settings.get().then(setSettings);
+  const loadCapability = () =>
+    window.admin.enquiries.notificationStatus().then((value) => {
+      setCapability(value);
+      setEnabled(value.enabled);
+    });
+  useEffect(() => {
+    void loadCapability();
+    void load();
+  }, []);
+  const profiles = settings?.localProfiles,
+    connection = settings?.databaseConnection;
+  async function clone() {
+    const result = await window.admin.settings.cloneTestDatabase();
+    await load();
+    notify(
+      result.safetyCopy
+        ? "Test database refreshed; the previous copy was preserved."
+        : "Intensive-testing database created safely.",
+    );
+  }
+  async function testNotification() {
+    const result = await window.admin.enquiries.testNotification();
+    notify(
+      result.outcome === "shown"
+        ? "Test notification shown. If it is not visible, check Windows notification settings."
+        : result.outcome === "unsupported"
+          ? "Native notifications are not supported in this runtime."
+          : "Windows could not show the test notification. Check notification permissions and Focus Assist.",
+    );
+  }
+  return (
+    <>
+      <Panel title="Local data profile">
+        <div className="profile-summary">
+          <div
+            className={
+              profiles?.active === "intensive-testing"
+                ? "testing-profile-banner"
+                : "connection-ok"
+            }
+          >
+            <strong>
+              {profiles?.active === "intensive-testing"
+                ? "Intensive testing"
+                : "Production"}
+            </strong>
+            <span>Active local SQLite profile</span>
+          </div>
+          <p className="muted">
+            Neon environment:{" "}
+            <strong>{connection?.environment ?? "unknown"}</strong> · source:{" "}
+            <strong>{connection?.source ?? "none"}</strong>
+          </p>
+          {profiles?.profiles.map((profile) => (
+            <article
+              className={`profile-card ${profile.id === profiles.active ? "active" : ""}`}
+              key={profile.id}
+            >
+              <div>
+                <strong>{profile.label}</strong>
+                <code>{profile.databasePath}</code>
+                <small>
+                  {profile.exists
+                    ? "Database available"
+                    : "Database not created"}
+                </small>
+              </div>
+              <button
+                type="button"
+                disabled={profile.id === profiles.active || !profile.exists}
+                onClick={() =>
+                  window.admin.settings
+                    .switchProfile(profile.id)
+                    .catch((error) => notify(error.message))
+                }
+              >
+                {profile.id === profiles.active ? "Active" : "Switch & restart"}
+              </button>
+            </article>
+          ))}
+          {profiles?.active === "production" && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => clone().catch((error) => notify(error.message))}
+            >
+              {profiles.profiles.find(
+                (profile) => profile.id === "intensive-testing",
+              )?.exists
+                ? "Refresh test copy from production"
+                : "Create test copy"}
+            </button>
+          )}
+          <p className="muted">
+            The test profile uses DATABASE_URL_PROD for the designated
+            least-privilege Neon child branch. Refreshing preserves the previous
+            test database as a timestamped safety copy.
+          </p>
+        </div>
+      </Panel>
+      <Panel title="Enquiry notifications">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={async (event) => {
+              const value = event.target.checked;
+              setEnabled(value);
+              await window.admin.enquiries.setPreference(value);
+              await loadCapability();
+              notify(
+                `Enquiry notifications ${value ? "enabled" : "disabled"}.`,
+              );
+            }}
+          />{" "}
+          Show native notifications for newly persisted enquiries
+        </label>
+        <p className="muted">
+          Native support:{" "}
+          <strong>{capability?.supported ? "Available" : "Unavailable"}</strong>{" "}
+          · Runtime:{" "}
+          <strong>
+            {capability?.packaged ? "Installed app" : "Development"}
+          </strong>
+        </p>
+        <button
+          type="button"
+          disabled={!capability?.supported}
+          onClick={() =>
+            testNotification().catch((error) => notify(error.message))
+          }
+        >
+          Send test notification
+        </button>
+        <p className="muted">
+          Windows notification permissions and Focus Assist can override this
+          preference. The Neon cursor and enquiry list continue updating while
+          alerts are disabled or unavailable, so old alerts are not replayed.
+        </p>
+      </Panel>
+    </>
+  );
+}
 
-function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="panel"><div className="panel-head"><h2>{title}</h2>{action}</div>{children}</section>; }
-function Empty({ text }: { text: string }) { return <div className="empty">{text}</div>; }
-function DataTable({ rows, columns, moneyKeys = [], actions }: { rows: any[]; columns: [string, string][]; moneyKeys?: string[]; actions?: (row: any) => React.ReactNode }) { if (!rows.length) return <Empty text="No records found for this period." />; return <div className="table-wrap"><table><thead><tr>{columns.map(([, label]) => <th key={label}>{label}</th>)}{actions && <th>Actions</th>}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id ?? index}>{columns.map(([key]) => <td key={key}>{moneyKeys.includes(key) ? money(row[key]) : displayValue(key,row[key])}</td>)}{actions && <td>{actions(row)}</td>}</tr>)}</tbody></table></div>; }
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+function Empty({ text }: { text: string }) {
+  return <div className="empty">{text}</div>;
+}
+function DataTable({
+  rows,
+  columns,
+  moneyKeys = [],
+  actions,
+}: {
+  rows: any[];
+  columns: [string, string][];
+  moneyKeys?: string[];
+  actions?: (row: any) => React.ReactNode;
+}) {
+  if (!rows.length) return <Empty text="No records found for this period." />;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {columns.map(([, label]) => (
+              <th key={label}>{label}</th>
+            ))}
+            {actions && <th>Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.id ?? index}>
+              {columns.map(([key]) => (
+                <td key={key}>
+                  {moneyKeys.includes(key)
+                    ? money(row[key])
+                    : displayValue(key, row[key])}
+                </td>
+              ))}
+              {actions && <td>{actions(row)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
